@@ -14,8 +14,38 @@ export interface Agent {
   emoji: string
   color: string
   enabledTools: ToolGroup[]
+  enabledSkillIds: number[]
+  collaboratorAgentIds: number[]
+  autoLearnSkills: boolean
   createdAt?: string
   updatedAt?: string
+}
+
+export interface AgentSkill {
+  id: number
+  name: string
+  description: string
+  content: string
+  version: number
+  status: 'ACTIVE' | 'ARCHIVED'
+  createdByAgentId?: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SkillProposal {
+  id: number
+  action: 'CREATE' | 'UPDATE'
+  targetSkillId?: number
+  sourceAgentId?: number
+  sourceRunId?: number
+  name: string
+  description: string
+  content: string
+  rationale: string
+  status: 'PENDING' | 'APPROVED' | 'REJECTED'
+  createdAt: string
+  reviewedAt?: string
 }
 
 export interface AgentRun {

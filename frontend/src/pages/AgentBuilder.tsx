@@ -4,7 +4,8 @@ import { useAgents } from '../stores/agentStore'
 import { useModels } from '../stores/modelStore'
 import { TermInput, Win } from '../components/ui'
 import ModelPicker from '../components/ModelPicker'
-import type { Agent, AgentType, ToolGroup } from '../types'
+import { listSkills } from '../api/skills'
+import type { Agent, AgentSkill, AgentType, ToolGroup } from '../types'
 
 const TOOLS: { id: ToolGroup; tag: string; label: string; desc: string }[] = [
   { id: 'http', tag: 'NET', label: 'http', desc: 'requisições a APIs externas' },
@@ -14,7 +15,7 @@ const TOOLS: { id: ToolGroup; tag: string; label: string; desc: string }[] = [
 ]
 
 const AGENT_TYPES: { id: AgentType; label: string; desc: string }[] = [
-  { id: 'native', label: 'Agents Pool', desc: 'loop nativo e ferramentas locais' },
+  { id: 'native', label: 'Agents Pool Hybrid', desc: 'skills, aprendizado e colaboração multiagente' },
   { id: 'hermes', label: 'Hermes Agent', desc: 'memória, skills e ferramentas do Hermes' },
   { id: 'openclaw', label: 'OpenClaw', desc: 'agente administrado pelo OpenClaw Gateway' },
   { id: 'external', label: 'Outro gateway', desc: 'qualquer agente com API OpenAI-compatible' },
@@ -26,6 +27,7 @@ const blank: Agent = {
   provider: 'openrouter', modelId: 'openai/gpt-4o-mini',
   baseUrl: '', temperature: 0.7, emoji: '', color: '#22ff9c',
   enabledTools: [],
+  enabledSkillIds: [], collaboratorAgentIds: [], autoLearnSkills: false,
 }
 
 export default function AgentBuilder() {
@@ -33,6 +35,7 @@ export default function AgentBuilder() {
   const [searchParams] = useSearchParams()
   const nav = useNavigate()
   const { agents, fetch, create, update } = useAgents()
+  const [availableSkills, setAvailableSkills] = useState<AgentSkill[]>([])
   const models = useModels((state) => state.models)
   const importedModelId = id ? null : searchParams.get('model')
   const importedConfigApplied = useRef(false)
@@ -47,6 +50,11 @@ export default function AgentBuilder() {
       else fetch()
     }
   }, [id, agents, fetch])
+
+  useEffect(() => {
+    if (!id) fetch()
+    listSkills().then(setAvailableSkills).catch(() => setAvailableSkills([]))
+  }, [id, fetch])
 
   useEffect(() => {
     if (!importedModelId || importedConfigApplied.current) return
@@ -74,6 +82,12 @@ export default function AgentBuilder() {
     set({ enabledTools: form.enabledTools.includes(t)
       ? form.enabledTools.filter((x) => x !== t)
       : [...form.enabledTools, t] })
+  const toggleSkill = (skillId: number) => set({ enabledSkillIds: form.enabledSkillIds.includes(skillId)
+    ? form.enabledSkillIds.filter((value) => value !== skillId)
+    : [...form.enabledSkillIds, skillId] })
+  const toggleCollaborator = (agentId: number) => set({ collaboratorAgentIds: form.collaboratorAgentIds.includes(agentId)
+    ? form.collaboratorAgentIds.filter((value) => value !== agentId)
+    : [...form.collaboratorAgentIds, agentId] })
 
   const setAgentType = (agentType: AgentType) => {
     if (agentType === 'hermes') {
@@ -226,6 +240,49 @@ export default function AgentBuilder() {
             As ferramentas, permissões, memória e skills são configuradas diretamente no runtime externo.
           </div>
         )}
+
+        <div>
+          <label className="label">skills</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {availableSkills.map((skill) => {
+              const on = form.enabledSkillIds.includes(skill.id)
+              return <button key={skill.id} type="button" onClick={() => toggleSkill(skill.id)}
+                className={`text-left rounded border px-3 py-2 ${on ? 'border-term-cyan/60 bg-term-cyan/10' : 'border-term-border hover:border-term-dim'}`}>
+                <div className="text-xs text-term-text">{skill.name} <span className="text-[9px] text-term-muted">v{skill.version}</span></div>
+                <div className="text-[10px] text-term-muted mt-1 line-clamp-2">{skill.description}</div>
+              </button>
+            })}
+            {availableSkills.length === 0 && <p className="text-xs text-term-muted">nenhuma skill ativa · crie em /skills</p>}
+          </div>
+        </div>
+
+        {form.agentType === 'native' && <>
+          <div>
+            <label className="label">collaborators</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {agents.filter((agent) => agent.id && agent.id !== Number(id)).map((agent) => {
+                const agentId = agent.id!
+                const on = form.collaboratorAgentIds.includes(agentId)
+                return <button key={agentId} type="button" onClick={() => toggleCollaborator(agentId)}
+                  className={`text-left rounded border px-3 py-2 ${on ? 'border-term-green/60 bg-term-green/10' : 'border-term-border hover:border-term-dim'}`}>
+                  <div className="text-xs text-term-text">{agent.name}</div>
+                  <div className="text-[10px] text-term-muted mt-1">{agent.modelId}</div>
+                </button>
+              })}
+              {agents.filter((agent) => agent.id && agent.id !== Number(id)).length === 0 &&
+                <p className="text-xs text-term-muted">crie outros agentes para habilitar delegação</p>}
+            </div>
+          </div>
+
+          <label className="panel p-3 flex items-start gap-3 cursor-pointer">
+            <input type="checkbox" className="mt-0.5 accent-term-green" checked={form.autoLearnSkills}
+              onChange={(event) => set({ autoLearnSkills: event.target.checked })} />
+            <span>
+              <span className="block text-xs text-term-text">aprender com tarefas concluídas</span>
+              <span className="block text-[10px] text-term-muted mt-1">O agente pode propor criação ou edição de skills. Toda mudança exige aprovação em /skills.</span>
+            </span>
+          </label>
+        </>}
 
         <div className="flex gap-3 pt-1">
           <button onClick={save} className="btn btn-primary">{id ? 'save' : 'create'}</button>

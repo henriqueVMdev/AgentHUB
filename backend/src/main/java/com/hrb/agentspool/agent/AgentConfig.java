@@ -28,6 +28,14 @@ public class AgentConfig {
     @ElementCollection(fetch = FetchType.EAGER)
     private List<String> enabledTools = new ArrayList<>();
 
+    @ElementCollection(fetch = FetchType.EAGER)
+    private List<Long> enabledSkillIds = new ArrayList<>();
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    private List<Long> collaboratorAgentIds = new ArrayList<>();
+
+    private Boolean autoLearnSkills = false;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -66,6 +74,12 @@ public class AgentConfig {
     public void setColor(String color) { this.color = color; }
     public List<String> getEnabledTools() { return enabledTools; }
     public void setEnabledTools(List<String> enabledTools) { this.enabledTools = enabledTools; }
+    public List<Long> getEnabledSkillIds() { return enabledSkillIds; }
+    public void setEnabledSkillIds(List<Long> enabledSkillIds) { this.enabledSkillIds = enabledSkillIds; }
+    public List<Long> getCollaboratorAgentIds() { return collaboratorAgentIds; }
+    public void setCollaboratorAgentIds(List<Long> collaboratorAgentIds) { this.collaboratorAgentIds = collaboratorAgentIds; }
+    public Boolean getAutoLearnSkills() { return Boolean.TRUE.equals(autoLearnSkills); }
+    public void setAutoLearnSkills(Boolean autoLearnSkills) { this.autoLearnSkills = autoLearnSkills; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
 }

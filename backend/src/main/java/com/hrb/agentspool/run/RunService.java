@@ -7,12 +7,17 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.hrb.agentspool.agent.AgentConfig;
 import com.hrb.agentspool.agent.AgentRepository;
 import com.hrb.agentspool.llm.LlmClient;
+import com.hrb.agentspool.skill.AgentSkill;
+import com.hrb.agentspool.skill.AgentSkillRepository;
+import com.hrb.agentspool.skill.SkillProposal;
+import com.hrb.agentspool.skill.SkillProposalRepository;
 import com.hrb.agentspool.tools.ToolRegistry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -29,6 +34,8 @@ public class RunService {
     private final AgentRunRepository runs;
     private final LlmClient llm;
     private final ToolRegistry tools;
+    private final AgentSkillRepository skills;
+    private final SkillProposalRepository skillProposals;
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Value("${app.hermes-base-url:}")
@@ -44,11 +51,14 @@ public class RunService {
     private final ConcurrentHashMap<Long, StartRunRequest> pending = new ConcurrentHashMap<>();
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
-    public RunService(AgentRepository agents, AgentRunRepository runs, LlmClient llm, ToolRegistry tools) {
+    public RunService(AgentRepository agents, AgentRunRepository runs, LlmClient llm, ToolRegistry tools,
+                      AgentSkillRepository skills, SkillProposalRepository skillProposals) {
         this.agents = agents;
         this.runs = runs;
         this.llm = llm;
         this.tools = tools;
+        this.skills = skills;
+        this.skillProposals = skillProposals;
     }
 
     /** Cria o registro de run (status RUNNING) e guarda o request para o /stream consumir. */
@@ -80,17 +90,13 @@ public class RunService {
             AgentConfig agent = agents.findById(req.agentId).orElseThrow();
 
             ArrayNode messages = mapper.createArrayNode();
-            if (agent.getSystemPrompt() != null && !agent.getSystemPrompt().isBlank()) {
-                messages.add(msg("system", agent.getSystemPrompt()));
-            }
+            String systemPrompt = buildSystemPrompt(agent);
+            if (!systemPrompt.isBlank()) messages.add(msg("system", systemPrompt));
             messages.add(msg("user", req.prompt));
 
             // Hermes e OpenClaw executam o próprio loop e suas próprias ferramentas no gateway.
             // Enviar também as tools locais criaria dois orquestradores concorrentes.
-            boolean externalRuntime = !"native".equals(agent.getAgentType());
-            ArrayNode toolDefs = externalRuntime
-                    ? mapper.createArrayNode()
-                    : tools.definitionsFor(agent.getEnabledTools());
+            ArrayNode toolDefs = buildToolDefs(agent);
 
             for (int step = 0; step < MAX_STEPS; step++) {
                 JsonNode assistant = llm.chat(runtimeBaseUrl(agent), runtimeApiKey(agent, req.apiKey), agent.getModelId(),
@@ -116,7 +122,7 @@ public class RunService {
                     send(emitter, "tool_call", mapper.createObjectNode()
                             .put("name", fnName).put("args", rawArgs).toString());
 
-                    String result = tools.execute(fnName, args);
+                    String result = executeTool(agent, fnName, args, req.apiKey, 0, runId);
 
                     send(emitter, "tool_result", mapper.createObjectNode()
                             .put("name", fnName).put("result", result).toString());
@@ -149,6 +155,137 @@ public class RunService {
         m.put("role", role);
         m.put("content", content);
         return m;
+    }
+
+    private String buildSystemPrompt(AgentConfig agent) {
+        StringBuilder prompt = new StringBuilder();
+        if (agent.getSystemPrompt() != null) prompt.append(agent.getSystemPrompt().trim());
+        List<Long> ids = agent.getEnabledSkillIds() == null ? List.of() : agent.getEnabledSkillIds();
+        List<AgentSkill> active = skills.findAllById(ids).stream()
+                .filter(skill -> "ACTIVE".equals(skill.getStatus())).toList();
+        if (!active.isEmpty()) {
+            prompt.append("\n\n<available_skills>\n");
+            for (AgentSkill skill : active) {
+                prompt.append("## ").append(skill.getName()).append(" (v").append(skill.getVersion()).append(")\n")
+                        .append(skill.getDescription() == null ? "" : skill.getDescription()).append("\n")
+                        .append(skill.getContent()).append("\n\n");
+            }
+            prompt.append("</available_skills>");
+        }
+        if (agent.getAutoLearnSkills()) {
+            prompt.append("\n\nWhen you complete a reusable multi-step workflow, find a correction, or improve an enabled skill, call propose_skill_change. Propose only durable procedures, never secrets or task-specific data. Proposals require human approval.");
+        }
+        return prompt.toString().trim();
+    }
+
+    private ArrayNode buildToolDefs(AgentConfig agent) {
+        if (!"native".equals(agent.getAgentType())) return mapper.createArrayNode();
+        ArrayNode defs = tools.definitionsFor(agent.getEnabledTools());
+        if (agent.getCollaboratorAgentIds() != null && !agent.getCollaboratorAgentIds().isEmpty()) {
+            String collaborators = agents.findAllById(agent.getCollaboratorAgentIds()).stream()
+                    .map(a -> a.getId() + "=" + a.getName()).reduce((a, b) -> a + ", " + b).orElse("");
+            ObjectNode properties = mapper.createObjectNode();
+            properties.set("agent_id", mapper.createObjectNode().put("type", "integer")
+                    .put("description", "Allowed collaborator: " + collaborators));
+            properties.set("task", mapper.createObjectNode().put("type", "string"));
+            defs.add(functionTool("delegate_agent", "Delegate a bounded subtask to one allowed collaborator.",
+                    properties, "agent_id", "task"));
+        }
+        if (agent.getAutoLearnSkills()) {
+            ObjectNode properties = mapper.createObjectNode();
+            properties.set("action", mapper.createObjectNode().put("type", "string")
+                    .set("enum", mapper.createArrayNode().add("CREATE").add("UPDATE")));
+            properties.set("target_skill_id", mapper.createObjectNode().put("type", "integer")
+                    .put("description", "Required only for UPDATE and must be an enabled skill."));
+            properties.set("name", mapper.createObjectNode().put("type", "string"));
+            properties.set("description", mapper.createObjectNode().put("type", "string"));
+            properties.set("content", mapper.createObjectNode().put("type", "string")
+                    .put("description", "Complete reusable procedure in Markdown."));
+            properties.set("rationale", mapper.createObjectNode().put("type", "string"));
+            defs.add(functionTool("propose_skill_change", "Stage a new or improved skill for human review.",
+                    properties, "action", "name", "content", "rationale"));
+        }
+        return defs;
+    }
+
+    private ObjectNode functionTool(String name, String description, ObjectNode properties, String... required) {
+        ObjectNode parameters = mapper.createObjectNode().put("type", "object");
+        parameters.set("properties", properties);
+        ArrayNode requiredNode = mapper.createArrayNode();
+        for (String field : required) requiredNode.add(field);
+        parameters.set("required", requiredNode);
+        ObjectNode function = mapper.createObjectNode().put("name", name).put("description", description);
+        function.set("parameters", parameters);
+        ObjectNode tool = mapper.createObjectNode().put("type", "function");
+        tool.set("function", function);
+        return tool;
+    }
+
+    private String executeTool(AgentConfig agent, String name, JsonNode args, String requestKey,
+                               int depth, Long sourceRunId) throws Exception {
+        if ("delegate_agent".equals(name)) {
+            if (depth >= 2) return "Delegation depth limit reached.";
+            long childId = args.path("agent_id").asLong(-1);
+            if (agent.getCollaboratorAgentIds() == null || !agent.getCollaboratorAgentIds().contains(childId)) {
+                return "Agent is not in the collaborator allowlist.";
+            }
+            AgentConfig child = agents.findById(childId).orElseThrow();
+            return executeChild(child, args.path("task").asText(), requestKey, depth + 1, sourceRunId);
+        }
+        if ("propose_skill_change".equals(name)) {
+            if (!agent.getAutoLearnSkills()) return "Skill learning is disabled for this agent.";
+            String action = args.path("action").asText("CREATE").toUpperCase();
+            Long targetId = args.hasNonNull("target_skill_id") ? args.path("target_skill_id").asLong() : null;
+            if ("UPDATE".equals(action) && (targetId == null || agent.getEnabledSkillIds() == null
+                    || !agent.getEnabledSkillIds().contains(targetId))) {
+                return "An UPDATE may only target a skill enabled for this agent.";
+            }
+            String content = args.path("content").asText();
+            if (content.isBlank() || content.length() > 50_000) return "Skill content must contain 1 to 50000 characters.";
+            SkillProposal proposal = new SkillProposal();
+            proposal.setAction("UPDATE".equals(action) ? "UPDATE" : "CREATE");
+            proposal.setTargetSkillId(targetId);
+            proposal.setSourceAgentId(agent.getId());
+            proposal.setSourceRunId(sourceRunId);
+            proposal.setName(limit(args.path("name").asText("unnamed-skill"), 120));
+            proposal.setDescription(limit(args.path("description").asText(""), 500));
+            proposal.setContent(content);
+            proposal.setRationale(limit(args.path("rationale").asText(""), 2000));
+            proposal = skillProposals.save(proposal);
+            return "Skill proposal #" + proposal.getId() + " staged for human approval.";
+        }
+        return tools.execute(name, args);
+    }
+
+    private String executeChild(AgentConfig child, String task, String requestKey, int depth, Long sourceRunId) throws Exception {
+        ArrayNode messages = mapper.createArrayNode();
+        String systemPrompt = buildSystemPrompt(child);
+        if (!systemPrompt.isBlank()) messages.add(msg("system", systemPrompt));
+        messages.add(msg("user", task));
+        ArrayNode defs = buildToolDefs(child);
+        String lastContent = "";
+        for (int step = 0; step < 6; step++) {
+            JsonNode assistant = llm.chat(runtimeBaseUrl(child), runtimeApiKey(child, requestKey), child.getModelId(),
+                    child.getTemperature(), messages, defs);
+            messages.add(assistant);
+            if (!assistant.path("content").asText("").isBlank()) lastContent = assistant.path("content").asText();
+            JsonNode calls = assistant.path("tool_calls");
+            if (!calls.isArray() || calls.isEmpty()) break;
+            for (JsonNode call : calls) {
+                String callId = call.path("id").asText();
+                String fn = call.path("function").path("name").asText();
+                JsonNode fnArgs = safeParse(call.path("function").path("arguments").asText("{}"));
+                ObjectNode toolMsg = mapper.createObjectNode().put("role", "tool")
+                        .put("tool_call_id", callId)
+                        .put("content", executeTool(child, fn, fnArgs, requestKey, depth, sourceRunId));
+                messages.add(toolMsg);
+            }
+        }
+        return lastContent.isBlank() ? "Collaborator completed without a text response." : lastContent;
+    }
+
+    private String limit(String value, int max) {
+        return value == null ? "" : value.substring(0, Math.min(value.length(), max));
     }
 
     private String runtimeBaseUrl(AgentConfig agent) {

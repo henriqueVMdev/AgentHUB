@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getAgent } from '../api/agents'
 import { startRun, streamRun } from '../api/runs'
-import { useConfig } from '../stores/configStore'
 import MessageStream, { type StreamItem } from '../components/MessageStream'
 import { TermInput } from '../components/ui'
 import type { Agent } from '../types'
@@ -10,7 +9,6 @@ import type { Agent } from '../types'
 export default function AgentRunner() {
   const { id } = useParams()
   const nav = useNavigate()
-  const { apiKey, hermesApiKey, openclawApiKey, externalAgentApiKey } = useConfig()
   const [agent, setAgent] = useState<Agent | null>(null)
   const [prompt, setPrompt] = useState('')
   const [items, setItems] = useState<StreamItem[]>([])
@@ -22,11 +20,7 @@ export default function AgentRunner() {
     if (!prompt.trim() || running) return
     setItems([]); setRunning(true)
     try {
-      const executionKey = agent?.agentType === 'hermes'
-        ? hermesApiKey
-        : agent?.agentType === 'openclaw' ? openclawApiKey
-        : agent?.agentType === 'external' ? externalAgentApiKey : apiKey
-      const runId = await startRun(Number(id), prompt, executionKey)
+      const runId = await startRun(Number(id), prompt)
       streamRun(runId, (e) => {
         setItems((prev) => {
           const next = [...prev]

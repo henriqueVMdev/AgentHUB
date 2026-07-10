@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useConfig } from '../stores/configStore'
+import { useEffect, useState } from 'react'
+import { getCredentialStatus, updateCredentials, type CredentialStatus } from '../api/settings'
 import { useTheme } from '../stores/themeStore'
 import { themes, hexToTriplet, tripletToHex, type Theme, type Token } from '../themes'
 import { TermInput, Win } from '../components/ui'
@@ -20,14 +20,20 @@ const FIELDS: { key: Token; label: string }[] = [
 ]
 
 export default function Settings() {
-  const { apiKey, hermesApiKey, openclawApiKey, externalAgentApiKey, setApiKey, setHermesApiKey, setOpenclawApiKey, setExternalAgentApiKey } = useConfig()
   const { themeId, customThemes, setTheme, addCustomTheme, removeCustomTheme } = useTheme()
 
-  const [value, setValue] = useState(apiKey)
-  const [hermesValue, setHermesValue] = useState(hermesApiKey)
-  const [openclawValue, setOpenclawValue] = useState(openclawApiKey)
-  const [externalValue, setExternalValue] = useState(externalAgentApiKey)
+  const [value, setValue] = useState('')
+  const [hermesValue, setHermesValue] = useState('')
+  const [openclawValue, setOpenclawValue] = useState('')
+  const [externalValue, setExternalValue] = useState('')
+  const [credentialStatus, setCredentialStatus] = useState<CredentialStatus | null>(null)
   const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  useEffect(() => {
+    getCredentialStatus().then(setCredentialStatus).catch(() => setSaveError('não foi possível carregar as credenciais'))
+  }, [])
 
   const all = [...themes, ...customThemes]
   const active = all.find((t) => t.id === themeId) ?? themes[0]
@@ -38,13 +44,26 @@ export default function Settings() {
     () => Object.fromEntries(FIELDS.map((f) => [f.key, tripletToHex(active.vars[f.key])])) as Record<Token, string>,
   )
 
-  const saveKey = () => {
-    setApiKey(value)
-    setHermesApiKey(hermesValue)
-    setOpenclawApiKey(openclawValue)
-    setExternalAgentApiKey(externalValue)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 1500)
+  const saveKey = async () => {
+    const changes = {
+      ...(value ? { openrouter: value } : {}),
+      ...(hermesValue ? { hermes: hermesValue } : {}),
+      ...(openclawValue ? { openclaw: openclawValue } : {}),
+      ...(externalValue ? { external: externalValue } : {}),
+    }
+    if (Object.keys(changes).length === 0) return
+    setSaving(true)
+    setSaveError('')
+    try {
+      setCredentialStatus(await updateCredentials(changes))
+      setValue(''); setHermesValue(''); setOpenclawValue(''); setExternalValue('')
+      setSaved(true)
+      setTimeout(() => setSaved(false), 1500)
+    } catch {
+      setSaveError('não foi possível salvar as credenciais')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const createTheme = () => {
@@ -130,28 +149,31 @@ export default function Settings() {
       <Win title="credentials.env" bodyClass="p-5 space-y-3 animate-fadeIn">
         <label className="label">openrouter_api_key</label>
         <TermInput prompt="$" type="password" value={value}
-          onChange={(e) => setValue(e.target.value)} placeholder="sk-or-..." />
+          onChange={(e) => setValue(e.target.value)} placeholder={credentialStatus?.openrouter ? 'configurada ••••••••' : 'sk-or-...'} />
         <div className="border-t border-term-border pt-3 mt-3">
           <label className="label">hermes_gateway_key</label>
           <TermInput prompt="$" type="password" value={hermesValue}
-            onChange={(e) => setHermesValue(e.target.value)} placeholder="API_SERVER_KEY" />
+            onChange={(e) => setHermesValue(e.target.value)} placeholder={credentialStatus?.hermes ? 'configurada ••••••••' : 'API_SERVER_KEY'} />
         </div>
         <div className="border-t border-term-border pt-3 mt-3">
           <label className="label">openclaw_gateway_token</label>
           <TermInput prompt="$" type="password" value={openclawValue}
-            onChange={(e) => setOpenclawValue(e.target.value)} placeholder="gateway bearer token" />
+            onChange={(e) => setOpenclawValue(e.target.value)} placeholder={credentialStatus?.openclaw ? 'configurado ••••••••' : 'gateway bearer token'} />
         </div>
         <div className="border-t border-term-border pt-3 mt-3">
           <label className="label">external_agent_key</label>
           <TermInput prompt="$" type="password" value={externalValue}
-            onChange={(e) => setExternalValue(e.target.value)} placeholder="opcional para outro gateway" />
+            onChange={(e) => setExternalValue(e.target.value)} placeholder={credentialStatus?.external ? 'configurada ••••••••' : 'opcional para outro gateway'} />
         </div>
         <p className="text-xs text-term-muted leading-relaxed">
           <span className="text-term-dim">// </span>
-          credenciais armazenadas apenas no navegador (localStorage) e enviadas ao backend somente durante
-          a execução. cada tipo de agente usa sua própria chave; nenhuma delas é gravada no banco.
+          credenciais salvas no backend e usadas imediatamente nas próximas execuções. os valores existentes
+          nunca são enviados de volta ao navegador; deixe um campo vazio para manter a credencial atual.
         </p>
-        <button onClick={saveKey} className="btn btn-primary mt-1">{saved ? 'saved ✓' : 'save'}</button>
+        {saveError && <p className="text-xs text-term-red">{saveError}</p>}
+        <button onClick={saveKey} disabled={saving} className="btn btn-primary mt-1">
+          {saving ? 'saving...' : saved ? 'saved ✓' : 'save'}
+        </button>
       </Win>
     </div>
   )

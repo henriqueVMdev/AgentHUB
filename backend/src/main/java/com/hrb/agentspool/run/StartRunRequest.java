@@ -3,7 +3,7 @@ package com.hrb.agentspool.run;
 public class StartRunRequest {
     public Long agentId;
     public String prompt;
-    public String apiKey;   // não persistido — usado apenas para a chamada LLM
+    public String apiKey;   // compatibilidade com clientes antigos; credenciais novas ficam no backend
 
     public Long getAgentId() { return agentId; }
     public void setAgentId(Long agentId) { this.agentId = agentId; }

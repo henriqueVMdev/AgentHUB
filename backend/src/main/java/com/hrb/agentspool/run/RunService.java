@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.hrb.agentspool.agent.AgentConfig;
 import com.hrb.agentspool.agent.AgentRepository;
+import com.hrb.agentspool.config.CredentialService;
 import com.hrb.agentspool.llm.LlmClient;
 import com.hrb.agentspool.skill.AgentSkill;
 import com.hrb.agentspool.skill.AgentSkillRepository;
@@ -40,25 +41,24 @@ public class RunService {
 
     @Value("${app.hermes-base-url:}")
     private String hermesBaseUrl;
-    @Value("${app.hermes-api-key:}")
-    private String hermesApiKey;
     @Value("${app.openclaw-base-url:}")
     private String openclawBaseUrl;
-    @Value("${app.openclaw-api-key:}")
-    private String openclawApiKey;
+    private final CredentialService credentials;
 
     // runId -> request pendente (entre /start e /stream)
     private final ConcurrentHashMap<Long, StartRunRequest> pending = new ConcurrentHashMap<>();
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
     public RunService(AgentRepository agents, AgentRunRepository runs, LlmClient llm, ToolRegistry tools,
-                      AgentSkillRepository skills, SkillProposalRepository skillProposals) {
+                      AgentSkillRepository skills, SkillProposalRepository skillProposals,
+                      CredentialService credentials) {
         this.agents = agents;
         this.runs = runs;
         this.llm = llm;
         this.tools = tools;
         this.skills = skills;
         this.skillProposals = skillProposals;
+        this.credentials = credentials;
     }
 
     /** Cria o registro de run (status RUNNING) e guarda o request para o /stream consumir. */
@@ -298,9 +298,10 @@ public class RunService {
 
     private String runtimeApiKey(AgentConfig agent, String requestKey) {
         String configured = switch (agent.getAgentType()) {
-            case "hermes" -> hermesApiKey;
-            case "openclaw" -> openclawApiKey;
-            default -> "";
+            case "hermes" -> credentials.get(CredentialService.HERMES);
+            case "openclaw" -> credentials.get(CredentialService.OPENCLAW);
+            case "external" -> credentials.get(CredentialService.EXTERNAL);
+            default -> credentials.get(CredentialService.OPENROUTER);
         };
         return configured == null || configured.isBlank() ? requestKey : configured;
     }

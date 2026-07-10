@@ -1,0 +1,16 @@
+# backend (Maven / Spring Boot)
+backend/target/
+backend/data/
+
+# frontend (Vite / Node)
+frontend/node_modules/
+frontend/dist/
+
+# logs / temp
+*.log
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.iml

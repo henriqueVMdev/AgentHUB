@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAgents } from '../stores/agentStore'
+import { useModels } from '../stores/modelStore'
 import { TermInput, Win } from '../components/ui'
 import ModelPicker from '../components/ModelPicker'
 import type { Agent, ToolGroup } from '../types'
@@ -21,9 +22,15 @@ const blank: Agent = {
 
 export default function AgentBuilder() {
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
   const nav = useNavigate()
   const { agents, fetch, create, update } = useAgents()
-  const [form, setForm] = useState<Agent>(blank)
+  const models = useModels((state) => state.models)
+  const importedModelId = id ? null : searchParams.get('model')
+  const importedConfigApplied = useRef(false)
+  const [form, setForm] = useState<Agent>(() => importedModelId
+    ? { ...blank, provider: 'openrouter', modelId: importedModelId }
+    : blank)
 
   useEffect(() => {
     if (id) {
@@ -32,6 +39,26 @@ export default function AgentBuilder() {
       else fetch()
     }
   }, [id, agents, fetch])
+
+  useEffect(() => {
+    if (!importedModelId || importedConfigApplied.current) return
+    const model = models.find((item) => item.id === importedModelId)
+    if (!model) return
+
+    const slug = model.id.split('/').pop()?.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'model'
+    const defaultTemperature = model.default_parameters?.temperature
+    importedConfigApplied.current = true
+    setForm((current) => ({
+      ...current,
+      name: current.name || `${slug}_agent`,
+      description: current.description || `Agente configurado com ${model.name} via OpenRouter.`,
+      provider: 'openrouter',
+      modelId: model.id,
+      temperature: typeof defaultTemperature === 'number'
+        ? Math.min(2, Math.max(0, defaultTemperature))
+        : current.temperature,
+    }))
+  }, [importedModelId, models])
 
   const set = (patch: Partial<Agent>) => setForm((f) => ({ ...f, ...patch }))
   const toggleTool = (t: ToolGroup) =>
@@ -56,6 +83,11 @@ export default function AgentBuilder() {
       </div>
 
       <Win title="agent.config" bodyClass="p-5 space-y-5 animate-fadeIn">
+        {importedModelId && (
+          <div className="rounded border border-term-green/35 bg-term-green/5 px-3 py-2 text-xs text-term-green">
+            ✓ configuração importada do catálogo: <span className="font-bold break-all">{importedModelId}</span>
+          </div>
+        )}
         <div className="grid grid-cols-[1fr_auto] gap-4 items-start">
           <div>
             <label className="label">name</label>

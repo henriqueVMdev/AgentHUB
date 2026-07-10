@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useModels } from '../stores/modelStore'
-import { isFree, type ORModel } from '../api/models'
+import { isFree, newAgentWithModelUrl, type ORModel } from '../api/models'
 import ModelBadges from '../components/ModelBadges'
 import { TermInput } from '../components/ui'
 
@@ -50,19 +50,26 @@ export default function Models() {
 
       <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         {filtered.map((m, i) => (
-          <Link to={`/models/${m.id}`} key={m.id}
+          <div key={m.id}
             className="panel p-4 animate-fadeIn flex flex-col gap-2 transition-all hover:border-term-green/50 hover:-translate-y-0.5 focus:outline-none focus:border-term-green"
             style={{ animationDelay: `${Math.min(i, 20) * 25}ms` }}>
-            <div>
+            <Link to={`/models/${m.id}`} className="block group">
               <div className="text-sm text-term-text font-semibold leading-tight">{m.name}</div>
               <div className="text-[11px] text-term-muted font-mono truncate">{m.id}</div>
-            </div>
+            </Link>
             <ModelBadges m={m} />
             {m.description && (
               <p className="text-xs text-term-muted line-clamp-3 mt-1">{m.description}</p>
             )}
-            <span className="text-[10px] uppercase tracking-[0.15em] text-term-green/70 mt-auto pt-1">ver detalhes →</span>
-          </Link>
+            <div className="flex items-center gap-2 mt-auto pt-2">
+              <Link to={`/models/${m.id}`} className="btn btn-ghost !px-2.5 !py-1.5 flex-1">
+                detalhes
+              </Link>
+              <Link to={newAgentWithModelUrl(m)} className="btn btn-primary !px-2.5 !py-1.5 flex-1">
+                + criar agente
+              </Link>
+            </div>
+          </div>
         ))}
       </div>
 

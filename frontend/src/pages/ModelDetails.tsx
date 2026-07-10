@@ -4,6 +4,7 @@ import {
   fmtPrice,
   fmtTokens,
   isFree,
+  newAgentWithModelUrl,
   perMillion,
   type ORModel,
 } from '../api/models'
@@ -95,7 +96,12 @@ export default function ModelDetails() {
           <h1 className="text-2xl font-bold mt-1">{model.name}</h1>
           <div className="text-xs text-term-muted mt-1 break-all">{model.id}</div>
         </div>
-        <ModelBadges m={model} />
+        <div className="flex flex-col items-start md:items-end gap-3">
+          <ModelBadges m={model} />
+          <Link to={newAgentWithModelUrl(model)} className="btn btn-primary">
+            + criar agente com este modelo
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">

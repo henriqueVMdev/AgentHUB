@@ -61,3 +61,7 @@ export const supportsTools = (m: ORModel) => (m.supported_parameters ?? []).incl
 
 export const hasVision = (m: ORModel) =>
   (m.architecture?.input_modalities ?? []).includes('image')
+
+/** URL do formulário de agente com o modelo do catálogo pré-selecionado. */
+export const newAgentWithModelUrl = (m: Pick<ORModel, 'id'>) =>
+  `/agents/new?model=${encodeURIComponent(m.id)}`

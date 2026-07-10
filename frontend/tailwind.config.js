@@ -5,16 +5,16 @@ export default {
     extend: {
       colors: {
         term: {
-          bg: '#080b0a',
-          panel: '#0d1411',
-          border: '#1b2a22',
-          green: '#22ff9c',
-          dim: '#3ba676',
-          cyan: '#22d3ee',
-          amber: '#fbbf24',
-          red: '#ff5c66',
-          text: '#c7f9e0',
-          muted: '#5c7d6c',
+          bg: 'rgb(var(--term-bg) / <alpha-value>)',
+          panel: 'rgb(var(--term-panel) / <alpha-value>)',
+          border: 'rgb(var(--term-border) / <alpha-value>)',
+          green: 'rgb(var(--term-green) / <alpha-value>)',
+          dim: 'rgb(var(--term-dim) / <alpha-value>)',
+          cyan: 'rgb(var(--term-cyan) / <alpha-value>)',
+          amber: 'rgb(var(--term-amber) / <alpha-value>)',
+          red: 'rgb(var(--term-red) / <alpha-value>)',
+          text: 'rgb(var(--term-text) / <alpha-value>)',
+          muted: 'rgb(var(--term-muted) / <alpha-value>)',
         },
       },
       fontFamily: {
@@ -25,10 +25,6 @@ export default {
         thinking: {
           '0%,80%,100%': { transform: 'scaleY(0.35)', opacity: '0.35' },
           '40%': { transform: 'scaleY(1)', opacity: '1' },
-        },
-        glowPulse: {
-          '0%,100%': { boxShadow: '0 0 0 1px rgba(34,255,156,0.25)' },
-          '50%': { boxShadow: '0 0 24px -2px rgba(34,255,156,0.55)' },
         },
         fadeIn: {
           from: { opacity: '0', transform: 'translateY(6px)' },

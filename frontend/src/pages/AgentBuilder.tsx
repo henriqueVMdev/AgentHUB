@@ -118,7 +118,7 @@ export default function AgentBuilder() {
               return (
                 <button key={t.id} onClick={() => toggleTool(t.id)}
                   className={`text-left rounded border px-3 py-2 transition-all duration-150 ${
-                    on ? 'border-term-green/60 bg-term-green/10 shadow-[0_0_18px_-6px_rgba(34,255,156,0.6)]'
+                    on ? 'border-term-green/60 bg-term-green/10 shadow-[0_0_18px_-6px_rgb(var(--term-green)/0.6)]'
                        : 'border-term-border hover:border-term-dim'}`}>
                   <div className="flex items-center gap-2">
                     <span className={`badge ${on ? 'border-term-green/50 text-term-green' : 'border-term-border text-term-muted'}`}>{t.tag}</span>

@@ -1,9 +1,12 @@
+import { useEffect } from 'react'
 import { NavLink, Route, Routes } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
 import AgentBuilder from './pages/AgentBuilder'
 import AgentRunner from './pages/AgentRunner'
 import RunHistory from './pages/RunHistory'
 import Settings from './pages/Settings'
+import { useTheme } from './stores/themeStore'
+import { applyTheme } from './themes'
 
 function NavItem({ to, children }: { to: string; children: string }) {
   return (
@@ -27,6 +30,9 @@ function NavItem({ to, children }: { to: string; children: string }) {
 }
 
 export default function App() {
+  const themeId = useTheme((s) => s.themeId)
+  useEffect(() => { applyTheme(themeId) }, [themeId])
+
   return (
     <div className="flex h-screen">
       <aside className="w-60 shrink-0 border-r border-term-border p-4 flex flex-col gap-1 bg-black/20">

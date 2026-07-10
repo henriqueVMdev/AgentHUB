@@ -4,20 +4,34 @@
 @tailwind utilities;
 
 @layer base {
+  /* defaults (tema Matrix) — evita flash antes do JS aplicar o tema salvo */
+  :root {
+    --term-bg: 8 11 10;
+    --term-panel: 13 20 17;
+    --term-border: 27 42 34;
+    --term-green: 34 255 156;
+    --term-dim: 59 166 118;
+    --term-cyan: 34 211 238;
+    --term-amber: 251 191 36;
+    --term-red: 255 92 102;
+    --term-text: 199 249 224;
+    --term-muted: 92 125 108;
+  }
+
   html, body, #root { height: 100%; }
 
   body {
     @apply bg-term-bg text-term-text font-mono antialiased;
   }
 
-  /* fundo: brilho fosforado + grade sutil */
+  /* fundo: brilho fosforado + grade sutil (na cor de destaque do tema) */
   body::before {
     content: '';
     position: fixed; inset: 0; pointer-events: none; z-index: -1;
     background:
-      radial-gradient(ellipse 80% 55% at 50% -8%, rgba(34,255,156,0.09), transparent 70%),
-      linear-gradient(rgba(34,255,156,0.035) 1px, transparent 1px) 0 0 / 100% 34px,
-      linear-gradient(90deg, rgba(34,255,156,0.035) 1px, transparent 1px) 0 0 / 34px 100%;
+      radial-gradient(ellipse 80% 55% at 50% -8%, rgb(var(--term-green) / 0.09), transparent 70%),
+      linear-gradient(rgb(var(--term-green) / 0.035) 1px, transparent 1px) 0 0 / 100% 34px,
+      linear-gradient(90deg, rgb(var(--term-green) / 0.035) 1px, transparent 1px) 0 0 / 34px 100%;
   }
 
   /* scanlines CRT */
@@ -28,12 +42,17 @@
     opacity: 0.35;
   }
 
-  ::selection { background: rgba(34,255,156,0.25); color: #fff; }
+  ::selection { background: rgb(var(--term-green) / 0.25); color: #fff; }
 
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #1b2a22; border-radius: 6px; }
-  ::-webkit-scrollbar-thumb:hover { background: #3ba676; }
+  ::-webkit-scrollbar-thumb { background: rgb(var(--term-border)); border-radius: 6px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgb(var(--term-dim)); }
+
+  @keyframes glowPulse {
+    0%, 100% { box-shadow: 0 0 0 1px rgb(var(--term-green) / 0.25); }
+    50% { box-shadow: 0 0 24px -2px rgb(var(--term-green) / 0.55); }
+  }
 }
 
 @layer components {
@@ -49,10 +68,11 @@
 
   /* input estilo linha de comando */
   .input-wrap {
-    @apply flex items-center gap-2 bg-black/40 border border-term-border rounded px-3
-           transition-all duration-150
-           focus-within:border-term-green
-           focus-within:shadow-[0_0_0_1px_rgba(34,255,156,0.35),0_0_22px_-6px_rgba(34,255,156,0.6)];
+    @apply flex items-center gap-2 bg-black/40 border border-term-border rounded px-3 transition-all duration-150;
+  }
+  .input-wrap:focus-within {
+    border-color: rgb(var(--term-green));
+    box-shadow: 0 0 0 1px rgb(var(--term-green) / 0.35), 0 0 22px -6px rgb(var(--term-green) / 0.6);
   }
   .input-prompt { @apply text-term-green/70 text-sm select-none; }
   .input-bare {
@@ -63,9 +83,11 @@
   /* campos não-terminal (textarea, select, range) */
   .field {
     @apply w-full bg-black/40 border border-term-border rounded px-3 py-2 text-sm text-term-text
-           caret-term-green outline-none transition-all duration-150
-           focus:border-term-green
-           focus:shadow-[0_0_0_1px_rgba(34,255,156,0.35),0_0_22px_-6px_rgba(34,255,156,0.6)];
+           caret-term-green outline-none transition-all duration-150;
+  }
+  .field:focus {
+    border-color: rgb(var(--term-green));
+    box-shadow: 0 0 0 1px rgb(var(--term-green) / 0.35), 0 0 22px -6px rgb(var(--term-green) / 0.6);
   }
 
   /* botões reativos */
@@ -74,14 +96,16 @@
            uppercase tracking-[0.15em] border transition-all duration-150 select-none
            active:translate-y-px disabled:opacity-40 disabled:pointer-events-none;
   }
-  .btn-primary {
-    @apply border-term-green/50 text-term-green bg-term-green/10
-           hover:bg-term-green/20 hover:shadow-[0_0_22px_-4px_rgba(34,255,156,0.65)];
+  .btn-primary { @apply border-term-green/50 text-term-green bg-term-green/10; }
+  .btn-primary:hover {
+    background-color: rgb(var(--term-green) / 0.2);
+    box-shadow: 0 0 22px -4px rgb(var(--term-green) / 0.65);
   }
   .btn-ghost { @apply border-term-border text-term-muted hover:text-term-text hover:border-term-dim; }
-  .btn-danger {
-    @apply border-term-red/40 text-term-red/90
-           hover:bg-term-red/15 hover:shadow-[0_0_20px_-6px_rgba(255,92,102,0.7)];
+  .btn-danger { @apply border-term-red/40 text-term-red/90; }
+  .btn-danger:hover {
+    background-color: rgb(var(--term-red) / 0.15);
+    box-shadow: 0 0 20px -6px rgb(var(--term-red) / 0.7);
   }
 
   .badge { @apply inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.15em] px-2 py-0.5 rounded border; }

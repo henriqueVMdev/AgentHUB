@@ -12,3 +12,7 @@ spring:
 
 app:
   sandbox-dir: ${SANDBOX_DIR:${user.home}/agents-pool-sandbox}
+  hermes-base-url: ${HERMES_BASE_URL:}
+  hermes-api-key: ${HERMES_API_SERVER_KEY:}
+  openclaw-base-url: ${OPENCLAW_BASE_URL:}
+  openclaw-api-key: ${OPENCLAW_GATEWAY_TOKEN:}

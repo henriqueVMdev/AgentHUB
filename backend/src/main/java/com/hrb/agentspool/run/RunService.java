@@ -8,6 +8,7 @@ import com.hrb.agentspool.agent.AgentConfig;
 import com.hrb.agentspool.agent.AgentRepository;
 import com.hrb.agentspool.llm.LlmClient;
 import com.hrb.agentspool.tools.ToolRegistry;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -29,6 +30,15 @@ public class RunService {
     private final LlmClient llm;
     private final ToolRegistry tools;
     private final ObjectMapper mapper = new ObjectMapper();
+
+    @Value("${app.hermes-base-url:}")
+    private String hermesBaseUrl;
+    @Value("${app.hermes-api-key:}")
+    private String hermesApiKey;
+    @Value("${app.openclaw-base-url:}")
+    private String openclawBaseUrl;
+    @Value("${app.openclaw-api-key:}")
+    private String openclawApiKey;
 
     // runId -> request pendente (entre /start e /stream)
     private final ConcurrentHashMap<Long, StartRunRequest> pending = new ConcurrentHashMap<>();
@@ -83,7 +93,7 @@ public class RunService {
                     : tools.definitionsFor(agent.getEnabledTools());
 
             for (int step = 0; step < MAX_STEPS; step++) {
-                JsonNode assistant = llm.chat(agent.getBaseUrl(), req.apiKey, agent.getModelId(),
+                JsonNode assistant = llm.chat(runtimeBaseUrl(agent), runtimeApiKey(agent, req.apiKey), agent.getModelId(),
                         agent.getTemperature(), messages, toolDefs);
                 messages.add(assistant);
 
@@ -139,6 +149,23 @@ public class RunService {
         m.put("role", role);
         m.put("content", content);
         return m;
+    }
+
+    private String runtimeBaseUrl(AgentConfig agent) {
+        return switch (agent.getAgentType()) {
+            case "hermes" -> hermesBaseUrl == null || hermesBaseUrl.isBlank() ? agent.getBaseUrl() : hermesBaseUrl;
+            case "openclaw" -> openclawBaseUrl == null || openclawBaseUrl.isBlank() ? agent.getBaseUrl() : openclawBaseUrl;
+            default -> agent.getBaseUrl();
+        };
+    }
+
+    private String runtimeApiKey(AgentConfig agent, String requestKey) {
+        String configured = switch (agent.getAgentType()) {
+            case "hermes" -> hermesApiKey;
+            case "openclaw" -> openclawApiKey;
+            default -> "";
+        };
+        return configured == null || configured.isBlank() ? requestKey : configured;
     }
 
     private String json(String key, String value) {

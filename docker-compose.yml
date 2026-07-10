@@ -1,0 +1,158 @@
+name: agents-pool
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-agentspool}
+      POSTGRES_USER: ${POSTGRES_USER:-agentspool}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agentspool-local}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [app]
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-agentspool}
+      DB_USER: ${POSTGRES_USER:-agentspool}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-agentspool-local}
+      SANDBOX_DIR: /sandbox
+      HERMES_BASE_URL: http://hermes:8642/v1
+      HERMES_API_SERVER_KEY: ${HERMES_API_SERVER_KEY:-change-this-hermes-key}
+      OPENCLAW_BASE_URL: http://openclaw:18789/v1
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-change-this-openclaw-token}
+    volumes:
+      - agent_sandbox:/sandbox
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-18080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [app, agents]
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-15173}:80"
+    depends_on: [backend]
+    networks: [app]
+
+  hermes:
+    image: nousresearch/hermes-agent:latest
+    profiles: [agents]
+    restart: unless-stopped
+    command: ["gateway", "run"]
+    environment:
+      API_SERVER_ENABLED: "true"
+      API_SERVER_HOST: 0.0.0.0
+      API_SERVER_PORT: "8642"
+      API_SERVER_KEY: ${HERMES_API_SERVER_KEY:-change-this-hermes-key}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+    volumes:
+      - hermes_data:/opt/data
+    ports:
+      - "127.0.0.1:8642:8642"
+    shm_size: 1gb
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8642/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks: [agents]
+
+  openclaw-init:
+    image: ghcr.io/openclaw/openclaw:latest
+    profiles: [agents]
+    restart: "no"
+    user: node
+    environment:
+      HOME: /home/node
+      OPENCLAW_HOME: /home/node
+      OPENCLAW_STATE_DIR: /home/node/.openclaw
+      OPENCLAW_CONFIG_PATH: /home/node/.openclaw/openclaw.json
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-change-this-openclaw-token}
+    volumes:
+      - openclaw_data:/home/node/.openclaw
+    entrypoint: ["node", "dist/index.js"]
+    command:
+      - config
+      - set
+      - --batch-json
+      - >-
+        [{"path":"gateway.mode","value":"local"},{"path":"gateway.bind","value":"lan"},{"path":"gateway.auth.mode","value":"token"},{"path":"gateway.http.endpoints.chatCompletions.enabled","value":true}]
+    networks: [agents]
+
+  openclaw:
+    image: ghcr.io/openclaw/openclaw:latest
+    profiles: [agents]
+    restart: unless-stopped
+    init: true
+    environment:
+      HOME: /home/node
+      OPENCLAW_HOME: /home/node
+      OPENCLAW_STATE_DIR: /home/node/.openclaw
+      OPENCLAW_CONFIG_PATH: /home/node/.openclaw/openclaw.json
+      OPENCLAW_WORKSPACE_DIR: /home/node/.openclaw/workspace
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-change-this-openclaw-token}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENCLAW_DISABLE_BONJOUR: "1"
+    volumes:
+      - openclaw_data:/home/node/.openclaw
+      - openclaw_workspace:/home/node/.openclaw/workspace
+    ports:
+      - "127.0.0.1:18789:18789"
+    command: ["node", "dist/index.js", "gateway", "--bind", "lan", "--port", "18789"]
+    cap_drop: [NET_RAW, NET_ADMIN]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:18789/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    depends_on:
+      openclaw-init:
+        condition: service_completed_successfully
+    networks: [agents]
+
+  openclaw-cli:
+    image: ghcr.io/openclaw/openclaw:latest
+    profiles: [cli]
+    user: node
+    environment:
+      HOME: /home/node
+      OPENCLAW_HOME: /home/node
+      OPENCLAW_STATE_DIR: /home/node/.openclaw
+      OPENCLAW_CONFIG_PATH: /home/node/.openclaw/openclaw.json
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-change-this-openclaw-token}
+      BROWSER: echo
+    volumes:
+      - openclaw_data:/home/node/.openclaw
+      - openclaw_workspace:/home/node/.openclaw/workspace
+    entrypoint: ["node", "dist/index.js"]
+    stdin_open: true
+    tty: true
+    networks: [agents]
+
+volumes:
+  postgres_data:
+  agent_sandbox:
+  hermes_data:
+  openclaw_data:
+  openclaw_workspace:
+
+networks:
+  app:
+  agents:

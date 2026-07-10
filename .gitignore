@@ -8,6 +8,7 @@ frontend/dist/
 
 # logs / temp
 *.log
+.env
 .DS_Store
 
 # IDE

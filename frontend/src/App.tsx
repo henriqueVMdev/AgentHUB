@@ -5,6 +5,7 @@ import AgentBuilder from './pages/AgentBuilder'
 import AgentRunner from './pages/AgentRunner'
 import RunHistory from './pages/RunHistory'
 import Models from './pages/Models'
+import ModelDetails from './pages/ModelDetails'
 import Settings from './pages/Settings'
 import { useTheme } from './stores/themeStore'
 import { applyVars, themes } from './themes'
@@ -64,6 +65,7 @@ export default function App() {
           <Route path="/agents/:id/run" element={<AgentRunner />} />
           <Route path="/agents/:id/runs" element={<RunHistory />} />
           <Route path="/models" element={<Models />} />
+          <Route path="/models/:author/:slug" element={<ModelDetails />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>

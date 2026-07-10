@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useModels } from '../stores/modelStore'
 import { isFree, type ORModel } from '../api/models'
 import ModelBadges from '../components/ModelBadges'
@@ -49,7 +50,8 @@ export default function Models() {
 
       <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         {filtered.map((m, i) => (
-          <div key={m.id} className="panel p-4 animate-fadeIn flex flex-col gap-2"
+          <Link to={`/models/${m.id}`} key={m.id}
+            className="panel p-4 animate-fadeIn flex flex-col gap-2 transition-all hover:border-term-green/50 hover:-translate-y-0.5 focus:outline-none focus:border-term-green"
             style={{ animationDelay: `${Math.min(i, 20) * 25}ms` }}>
             <div>
               <div className="text-sm text-term-text font-semibold leading-tight">{m.name}</div>
@@ -59,7 +61,8 @@ export default function Models() {
             {m.description && (
               <p className="text-xs text-term-muted line-clamp-3 mt-1">{m.description}</p>
             )}
-          </div>
+            <span className="text-[10px] uppercase tracking-[0.15em] text-term-green/70 mt-auto pt-1">ver detalhes →</span>
+          </Link>
         ))}
       </div>
 

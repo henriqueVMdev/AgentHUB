@@ -6,7 +6,7 @@ import AgentRunner from './pages/AgentRunner'
 import RunHistory from './pages/RunHistory'
 import Settings from './pages/Settings'
 import { useTheme } from './stores/themeStore'
-import { applyTheme } from './themes'
+import { applyVars, themes } from './themes'
 
 function NavItem({ to, children }: { to: string; children: string }) {
   return (
@@ -31,7 +31,12 @@ function NavItem({ to, children }: { to: string; children: string }) {
 
 export default function App() {
   const themeId = useTheme((s) => s.themeId)
-  useEffect(() => { applyTheme(themeId) }, [themeId])
+  const customThemes = useTheme((s) => s.customThemes)
+  useEffect(() => {
+    const all = [...themes, ...customThemes]
+    const theme = all.find((t) => t.id === themeId) ?? themes[0]
+    applyVars(theme.vars)
+  }, [themeId, customThemes])
 
   return (
     <div className="flex h-screen">

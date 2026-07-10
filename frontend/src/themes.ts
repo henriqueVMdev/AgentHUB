@@ -54,9 +54,28 @@ export const themes: Theme[] = [
 
 export const defaultThemeId = 'matrix'
 
-export function applyTheme(id: string) {
+/** Aplica um conjunto de vars (triplets "R G B") ao :root. */
+export function applyVars(vars: Record<Token, string>) {
   if (typeof document === 'undefined') return
-  const theme = themes.find((t) => t.id === id) ?? themes[0]
   const root = document.documentElement
-  for (const token of TOKENS) root.style.setProperty(`--term-${token}`, theme.vars[token])
+  for (const token of TOKENS) root.style.setProperty(`--term-${token}`, vars[token])
+}
+
+export function applyTheme(id: string) {
+  const theme = themes.find((t) => t.id === id) ?? themes[0]
+  applyVars(theme.vars)
+}
+
+/** "#22ff9c" -> "34 255 156" */
+export function hexToTriplet(hex: string): string {
+  const h = hex.replace('#', '')
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h
+  const n = parseInt(full, 16)
+  return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`
+}
+
+/** "34 255 156" -> "#22ff9c" */
+export function tripletToHex(triplet: string): string {
+  const [r, g, b] = triplet.split(' ').map(Number)
+  return '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')
 }

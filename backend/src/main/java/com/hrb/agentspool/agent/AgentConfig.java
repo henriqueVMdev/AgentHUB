@@ -17,6 +17,7 @@ public class AgentConfig {
     @Column(columnDefinition = "TEXT")
     private String systemPrompt;
 
+    private String agentType = "native"; // "native" | "hermes" | "openclaw" | "external"
     private String provider;   // "openrouter" | "local"
     private String modelId;    // ex: "openai/gpt-4o", "llama3"
     private String baseUrl;    // ex: "http://localhost:11434/v1"
@@ -49,6 +50,8 @@ public class AgentConfig {
     public void setDescription(String description) { this.description = description; }
     public String getSystemPrompt() { return systemPrompt; }
     public void setSystemPrompt(String systemPrompt) { this.systemPrompt = systemPrompt; }
+    public String getAgentType() { return agentType == null || agentType.isBlank() ? "native" : agentType; }
+    public void setAgentType(String agentType) { this.agentType = agentType; }
     public String getProvider() { return provider; }
     public void setProvider(String provider) { this.provider = provider; }
     public String getModelId() { return modelId; }

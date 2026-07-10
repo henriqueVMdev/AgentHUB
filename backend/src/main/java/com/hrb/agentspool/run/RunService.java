@@ -75,7 +75,12 @@ public class RunService {
             }
             messages.add(msg("user", req.prompt));
 
-            ArrayNode toolDefs = tools.definitionsFor(agent.getEnabledTools());
+            // Hermes e OpenClaw executam o próprio loop e suas próprias ferramentas no gateway.
+            // Enviar também as tools locais criaria dois orquestradores concorrentes.
+            boolean externalRuntime = !"native".equals(agent.getAgentType());
+            ArrayNode toolDefs = externalRuntime
+                    ? mapper.createArrayNode()
+                    : tools.definitionsFor(agent.getEnabledTools());
 
             for (int step = 0; step < MAX_STEPS; step++) {
                 JsonNode assistant = llm.chat(agent.getBaseUrl(), req.apiKey, agent.getModelId(),

@@ -4,7 +4,7 @@ import { useAgents } from '../stores/agentStore'
 import { useModels } from '../stores/modelStore'
 import { TermInput, Win } from '../components/ui'
 import ModelPicker from '../components/ModelPicker'
-import type { Agent, ToolGroup } from '../types'
+import type { Agent, AgentType, ToolGroup } from '../types'
 
 const TOOLS: { id: ToolGroup; tag: string; label: string; desc: string }[] = [
   { id: 'http', tag: 'NET', label: 'http', desc: 'requisições a APIs externas' },
@@ -13,8 +13,16 @@ const TOOLS: { id: ToolGroup; tag: string; label: string; desc: string }[] = [
   { id: 'browser', tag: 'WEB', label: 'browser', desc: 'navegação web (playwright)' },
 ]
 
+const AGENT_TYPES: { id: AgentType; label: string; desc: string }[] = [
+  { id: 'native', label: 'Agents Pool', desc: 'loop nativo e ferramentas locais' },
+  { id: 'hermes', label: 'Hermes Agent', desc: 'memória, skills e ferramentas do Hermes' },
+  { id: 'openclaw', label: 'OpenClaw', desc: 'agente administrado pelo OpenClaw Gateway' },
+  { id: 'external', label: 'Outro gateway', desc: 'qualquer agente com API OpenAI-compatible' },
+]
+
 const blank: Agent = {
   name: '', description: '', systemPrompt: '',
+  agentType: 'native',
   provider: 'openrouter', modelId: 'openai/gpt-4o-mini',
   baseUrl: '', temperature: 0.7, emoji: '', color: '#22ff9c',
   enabledTools: [],
@@ -52,6 +60,7 @@ export default function AgentBuilder() {
       ...current,
       name: current.name || `${slug}_agent`,
       description: current.description || `Agente configurado com ${model.name} via OpenRouter.`,
+      agentType: 'native',
       provider: 'openrouter',
       modelId: model.id,
       temperature: typeof defaultTemperature === 'number'
@@ -65,6 +74,18 @@ export default function AgentBuilder() {
     set({ enabledTools: form.enabledTools.includes(t)
       ? form.enabledTools.filter((x) => x !== t)
       : [...form.enabledTools, t] })
+
+  const setAgentType = (agentType: AgentType) => {
+    if (agentType === 'hermes') {
+      set({ agentType, provider: 'local', modelId: 'hermes-agent', baseUrl: 'http://127.0.0.1:8642/v1', enabledTools: [] })
+    } else if (agentType === 'openclaw') {
+      set({ agentType, provider: 'local', modelId: 'openclaw/default', baseUrl: 'http://127.0.0.1:18789/v1', enabledTools: [] })
+    } else if (agentType === 'external') {
+      set({ agentType, provider: 'local', modelId: 'agent/default', baseUrl: 'http://127.0.0.1:8000/v1', enabledTools: [] })
+    } else {
+      set({ agentType, provider: 'openrouter', modelId: 'openai/gpt-4o-mini', baseUrl: '' })
+    }
+  }
 
   const save = async () => {
     if (!form.name.trim()) { alert('defina um nome'); return }
@@ -113,6 +134,25 @@ export default function AgentBuilder() {
         </div>
 
         <div>
+          <label className="label">agent_type</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {AGENT_TYPES.map((type) => {
+              const selected = form.agentType === type.id
+              return (
+                <button key={type.id} type="button" onClick={() => setAgentType(type.id)}
+                  className={`text-left rounded border px-3 py-2 transition-all ${
+                    selected ? 'border-term-green/60 bg-term-green/10' : 'border-term-border hover:border-term-dim'
+                  }`}>
+                  <div className={selected ? 'text-sm text-term-green' : 'text-sm text-term-text'}>{type.label}</div>
+                  <div className="text-[10px] text-term-muted mt-1 leading-4">{type.desc}</div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {form.agentType === 'native' ? <>
+        <div>
           <label className="label">provider</label>
           <select className="field" value={form.provider}
             onChange={(e) => set({ provider: e.target.value as Agent['provider'] })}>
@@ -138,6 +178,21 @@ export default function AgentBuilder() {
               placeholder="http://localhost:11434/v1" />
           </div>
         )}
+        </> : <>
+          <div className="rounded border border-term-cyan/30 bg-term-cyan/5 px-3 py-2 text-xs text-term-muted leading-5">
+            <span className="text-term-cyan">// runtime externo</span><br />
+            Inicie o gateway separadamente. O Agents Pool enviará as tarefas pela API compatível com OpenAI.
+          </div>
+          <div>
+            <label className="label">runtime_model</label>
+            <TermInput prompt="#" value={form.modelId} onChange={(e) => set({ modelId: e.target.value })}
+              placeholder={form.agentType === 'hermes' ? 'hermes-agent' : form.agentType === 'openclaw' ? 'openclaw/default' : 'agent/default'} />
+          </div>
+          <div>
+            <label className="label">gateway_base_url</label>
+            <TermInput prompt="@" value={form.baseUrl} onChange={(e) => set({ baseUrl: e.target.value })} />
+          </div>
+        </>}
 
         <div>
           <label className="label">temperature :: {form.temperature.toFixed(1)}</label>
@@ -146,7 +201,7 @@ export default function AgentBuilder() {
             className="w-full accent-term-green" />
         </div>
 
-        <div>
+        {form.agentType === 'native' ? <div>
           <label className="label">tools</label>
           <div className="grid grid-cols-2 gap-2">
             {TOOLS.map((t) => {
@@ -166,7 +221,11 @@ export default function AgentBuilder() {
               )
             })}
           </div>
-        </div>
+        </div> : (
+          <div className="text-xs text-term-muted border-t border-term-border pt-4">
+            As ferramentas, permissões, memória e skills são configuradas diretamente no runtime externo.
+          </div>
+        )}
 
         <div className="flex gap-3 pt-1">
           <button onClick={save} className="btn btn-primary">{id ? 'save' : 'create'}</button>

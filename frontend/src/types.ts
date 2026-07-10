@@ -1,10 +1,12 @@
 export type ToolGroup = 'http' | 'file' | 'code' | 'browser'
+export type AgentType = 'native' | 'hermes' | 'openclaw' | 'external'
 
 export interface Agent {
   id?: number
   name: string
   description: string
   systemPrompt: string
+  agentType: AgentType
   provider: 'openrouter' | 'local'
   modelId: string
   baseUrl: string

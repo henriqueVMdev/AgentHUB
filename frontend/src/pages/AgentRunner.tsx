@@ -10,7 +10,7 @@ import type { Agent } from '../types'
 export default function AgentRunner() {
   const { id } = useParams()
   const nav = useNavigate()
-  const apiKey = useConfig((s) => s.apiKey)
+  const { apiKey, hermesApiKey, openclawApiKey, externalAgentApiKey } = useConfig()
   const [agent, setAgent] = useState<Agent | null>(null)
   const [prompt, setPrompt] = useState('')
   const [items, setItems] = useState<StreamItem[]>([])
@@ -22,7 +22,11 @@ export default function AgentRunner() {
     if (!prompt.trim() || running) return
     setItems([]); setRunning(true)
     try {
-      const runId = await startRun(Number(id), prompt, apiKey)
+      const executionKey = agent?.agentType === 'hermes'
+        ? hermesApiKey
+        : agent?.agentType === 'openclaw' ? openclawApiKey
+        : agent?.agentType === 'external' ? externalAgentApiKey : apiKey
+      const runId = await startRun(Number(id), prompt, executionKey)
       streamRun(runId, (e) => {
         setItems((prev) => {
           const next = [...prev]

@@ -20,10 +20,13 @@ const FIELDS: { key: Token; label: string }[] = [
 ]
 
 export default function Settings() {
-  const { apiKey, setApiKey } = useConfig()
+  const { apiKey, hermesApiKey, openclawApiKey, externalAgentApiKey, setApiKey, setHermesApiKey, setOpenclawApiKey, setExternalAgentApiKey } = useConfig()
   const { themeId, customThemes, setTheme, addCustomTheme, removeCustomTheme } = useTheme()
 
   const [value, setValue] = useState(apiKey)
+  const [hermesValue, setHermesValue] = useState(hermesApiKey)
+  const [openclawValue, setOpenclawValue] = useState(openclawApiKey)
+  const [externalValue, setExternalValue] = useState(externalAgentApiKey)
   const [saved, setSaved] = useState(false)
 
   const all = [...themes, ...customThemes]
@@ -37,6 +40,9 @@ export default function Settings() {
 
   const saveKey = () => {
     setApiKey(value)
+    setHermesApiKey(hermesValue)
+    setOpenclawApiKey(openclawValue)
+    setExternalAgentApiKey(externalValue)
     setSaved(true)
     setTimeout(() => setSaved(false), 1500)
   }
@@ -125,11 +131,25 @@ export default function Settings() {
         <label className="label">openrouter_api_key</label>
         <TermInput prompt="$" type="password" value={value}
           onChange={(e) => setValue(e.target.value)} placeholder="sk-or-..." />
+        <div className="border-t border-term-border pt-3 mt-3">
+          <label className="label">hermes_gateway_key</label>
+          <TermInput prompt="$" type="password" value={hermesValue}
+            onChange={(e) => setHermesValue(e.target.value)} placeholder="API_SERVER_KEY" />
+        </div>
+        <div className="border-t border-term-border pt-3 mt-3">
+          <label className="label">openclaw_gateway_token</label>
+          <TermInput prompt="$" type="password" value={openclawValue}
+            onChange={(e) => setOpenclawValue(e.target.value)} placeholder="gateway bearer token" />
+        </div>
+        <div className="border-t border-term-border pt-3 mt-3">
+          <label className="label">external_agent_key</label>
+          <TermInput prompt="$" type="password" value={externalValue}
+            onChange={(e) => setExternalValue(e.target.value)} placeholder="opcional para outro gateway" />
+        </div>
         <p className="text-xs text-term-muted leading-relaxed">
           <span className="text-term-dim">// </span>
-          armazenada apenas no navegador (localStorage). enviada ao backend só no momento da execução,
-          nunca gravada no banco. para modelos locais (ollama / lm studio) a chave é ignorada — basta
-          configurar a base_url no agente.
+          credenciais armazenadas apenas no navegador (localStorage) e enviadas ao backend somente durante
+          a execução. cada tipo de agente usa sua própria chave; nenhuma delas é gravada no banco.
         </p>
         <button onClick={saveKey} className="btn btn-primary mt-1">{saved ? 'saved ✓' : 'save'}</button>
       </Win>

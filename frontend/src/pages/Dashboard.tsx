@@ -1,13 +1,31 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAgents } from '../stores/agentStore'
 import AgentCard from '../components/AgentCard'
+import { listRuns } from '../api/agents'
+import type { AgentRun } from '../types'
 
 export default function Dashboard() {
   const { agents, loading, fetch, remove } = useAgents()
   const nav = useNavigate()
+  const [latestRuns, setLatestRuns] = useState<Record<number, AgentRun>>({})
 
   useEffect(() => { fetch() }, [fetch])
+
+  useEffect(() => {
+    if (!agents.length) return
+    let active = true
+    const loadRuns = async () => {
+      const entries = await Promise.all(agents.map(async (agent) => {
+        const runs = await listRuns(agent.id!)
+        return [agent.id!, runs[0]] as const
+      }))
+      if (active) setLatestRuns(Object.fromEntries(entries.filter(([, run]) => run)))
+    }
+    loadRuns()
+    const timer = window.setInterval(loadRuns, 5000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [agents])
 
   return (
     <div className="p-8 max-w-6xl">
@@ -42,6 +60,7 @@ export default function Dashboard() {
           <div key={a.id} style={{ animationDelay: `${i * 50}ms` }} className="animate-fadeIn">
             <AgentCard
               agent={a}
+              runStatus={latestRuns[a.id!]?.status}
               onRun={() => nav(`/agents/${a.id}/run`)}
               onEdit={() => nav(`/agents/${a.id}/edit`)}
               onDelete={() => { if (confirm(`rm "${a.name}"?`)) remove(a.id!) }}

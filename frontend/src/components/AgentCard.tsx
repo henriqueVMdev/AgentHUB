@@ -3,15 +3,23 @@ import type { Agent } from '../types'
 
 interface Props {
   agent: Agent
-  running?: boolean
+  runStatus?: 'RUNNING' | 'DONE' | 'ERROR'
   onRun: () => void
   onEdit: () => void
   onDelete: () => void
 }
 
-export default function AgentCard({ agent, running, onRun, onEdit, onDelete }: Props) {
+export default function AgentCard({ agent, runStatus, onRun, onEdit, onDelete }: Props) {
   const nav = useNavigate()
   const mono = (agent.name.trim().slice(0, 2) || 'ag').toUpperCase()
+  const running = runStatus === 'RUNNING'
+  const statusLabel = running ? 'running' : runStatus === 'DONE' ? 'done' : runStatus === 'ERROR' ? 'error' : 'idle'
+  const statusClass = running
+    ? 'border-term-amber/40 text-term-amber'
+    : runStatus === 'DONE' ? 'border-term-green/40 text-term-green'
+      : runStatus === 'ERROR' ? 'border-term-red/40 text-term-red' : 'border-term-border text-term-muted'
+  const dotClass = running ? 'bg-term-amber animate-pulse'
+    : runStatus === 'DONE' ? 'bg-term-green' : runStatus === 'ERROR' ? 'bg-term-red' : 'bg-term-muted'
 
   return (
     <div
@@ -30,10 +38,10 @@ export default function AgentCard({ agent, running, onRun, onEdit, onDelete }: P
           <div className="text-xs text-term-muted truncate">{agent.modelId}</div>
         </div>
         <span
-          className={`ml-auto badge ${running ? 'border-term-amber/40 text-term-amber' : 'border-term-border text-term-muted'}`}
+          className={`ml-auto badge ${statusClass}`}
         >
-          <span className={`w-1.5 h-1.5 rounded-full ${running ? 'bg-term-amber animate-pulse' : 'bg-term-muted'}`} />
-          {running ? 'running' : 'idle'}
+          <span className={`w-1.5 h-1.5 rounded-full ${dotClass}`} />
+          {statusLabel}
         </span>
       </div>
 

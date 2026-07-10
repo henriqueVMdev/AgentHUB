@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard'
 import AgentBuilder from './pages/AgentBuilder'
 import AgentRunner from './pages/AgentRunner'
 import RunHistory from './pages/RunHistory'
+import Models from './pages/Models'
 import Settings from './pages/Settings'
 import { useTheme } from './stores/themeStore'
 import { applyVars, themes } from './themes'
@@ -51,6 +52,7 @@ export default function App() {
         </div>
         <NavItem to="/">dashboard</NavItem>
         <NavItem to="/agents/new">new_agent</NavItem>
+        <NavItem to="/models">models</NavItem>
         <NavItem to="/settings">settings</NavItem>
         <div className="mt-auto px-3 text-[10px] text-term-muted/60 tracking-widest">v0.1.0</div>
       </aside>
@@ -61,6 +63,7 @@ export default function App() {
           <Route path="/agents/:id/edit" element={<AgentBuilder />} />
           <Route path="/agents/:id/run" element={<AgentRunner />} />
           <Route path="/agents/:id/runs" element={<RunHistory />} />
+          <Route path="/models" element={<Models />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>

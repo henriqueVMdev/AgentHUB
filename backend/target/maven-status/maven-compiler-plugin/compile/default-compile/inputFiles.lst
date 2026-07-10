@@ -4,6 +4,7 @@ C:\Users\ASSIST88\Documents\Agents_pool\backend\src\main\java\com\hrb\agentspool
 C:\Users\ASSIST88\Documents\Agents_pool\backend\src\main\java\com\hrb\agentspool\AgentsPoolApplication.java
 C:\Users\ASSIST88\Documents\Agents_pool\backend\src\main\java\com\hrb\agentspool\config\CorsConfig.java
 C:\Users\ASSIST88\Documents\Agents_pool\backend\src\main\java\com\hrb\agentspool\llm\LlmClient.java
+C:\Users\ASSIST88\Documents\Agents_pool\backend\src\main\java\com\hrb\agentspool\llm\ModelsController.java
 C:\Users\ASSIST88\Documents\Agents_pool\backend\src\main\java\com\hrb\agentspool\run\AgentRun.java
 C:\Users\ASSIST88\Documents\Agents_pool\backend\src\main\java\com\hrb\agentspool\run\AgentRunRepository.java
 C:\Users\ASSIST88\Documents\Agents_pool\backend\src\main\java\com\hrb\agentspool\run\RunController.java

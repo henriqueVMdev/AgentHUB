@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAgents } from '../stores/agentStore'
 import { TermInput, Win } from '../components/ui'
+import ModelPicker from '../components/ModelPicker'
 import type { Agent, ToolGroup } from '../types'
 
 const TOOLS: { id: ToolGroup; tag: string; label: string; desc: string }[] = [
@@ -79,20 +80,23 @@ export default function AgentBuilder() {
             placeholder="você é um assistente que..." />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="label">provider</label>
-            <select className="field" value={form.provider}
-              onChange={(e) => set({ provider: e.target.value as Agent['provider'] })}>
-              <option value="openrouter">openrouter</option>
-              <option value="local">local (openai-compat)</option>
-            </select>
-          </div>
-          <div>
-            <label className="label">model</label>
+        <div>
+          <label className="label">provider</label>
+          <select className="field" value={form.provider}
+            onChange={(e) => set({ provider: e.target.value as Agent['provider'] })}>
+            <option value="openrouter">openrouter</option>
+            <option value="local">local (openai-compat)</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="label">model</label>
+          {form.provider === 'openrouter' ? (
+            <ModelPicker value={form.modelId} onSelect={(id) => set({ modelId: id })} />
+          ) : (
             <TermInput prompt="#" value={form.modelId} onChange={(e) => set({ modelId: e.target.value })}
-              placeholder={form.provider === 'local' ? 'llama3' : 'openai/gpt-4o-mini'} />
-          </div>
+              placeholder="llama3" />
+          )}
         </div>
 
         {form.provider === 'local' && (

@@ -182,12 +182,13 @@
 }
 
 @layer components {
-  .task-loader { --loader-size: .42; width: calc(100px * var(--loader-size)); height: calc(100px * var(--loader-size)); position: relative; flex: none; border-radius: 50%; filter: drop-shadow(0 0 10px rgb(var(--term-green) / .55)); }
+  .task-loader { --loader-size: .42; width: calc(100px * var(--loader-size)); height: calc(100px * var(--loader-size)); position: relative; flex: none; border-radius: 50%; box-shadow: 0 0 25px rgb(var(--term-green) / .5), 0 20px 50px rgb(var(--term-cyan) / .35); animation: loaderColorize 6s ease-in-out infinite; }
   .task-loader svg { position: absolute; inset: 0; transform: scale(var(--loader-size)); transform-origin: top left; }
-  .task-loader::before { content: ''; position: absolute; inset: 0; border-radius: 50%; border: 1px solid rgb(var(--term-green) / .7); animation: loaderRotation 2s linear infinite; }
-  .task-loader__shape { fill: rgb(var(--term-green)); filter: blur(2px); transform-origin: center; animation: loaderRotation 1.2s linear infinite reverse, loaderColor 6s ease-in-out infinite; }
+  .task-loader::before { content: ''; position: absolute; inset: 0; border-radius: 50%; border-top: 1px solid rgb(var(--term-green)); border-bottom: 1px solid rgb(var(--term-cyan)); background: linear-gradient(180deg, rgb(var(--term-green) / .25), rgb(var(--term-cyan) / .35)); box-shadow: inset 0 10px 10px rgb(var(--term-green) / .35), inset 0 -10px 10px rgb(var(--term-cyan) / .3); }
+  .task-loader__shape { fill: rgb(var(--term-green)); filter: blur(7px) contrast(15); transform-origin: center; animation: loaderRotation 2s linear infinite, loaderRoundness 1s linear infinite; }
   @keyframes loaderRotation { to { transform: rotate(360deg); } }
-  @keyframes loaderColor { 50% { fill: rgb(var(--term-cyan)); } }
+  @keyframes loaderRoundness { 0%, 60%, 100% { filter: blur(7px) contrast(15); } 20%, 40% { filter: blur(7px) contrast(3); } }
+  @keyframes loaderColorize { 0%, 100% { filter: hue-rotate(0deg); } 40% { filter: hue-rotate(-60deg); } 70% { filter: hue-rotate(-90deg); } }
   .panel { @apply bg-term-panel/80 border border-term-border rounded-md backdrop-blur-sm; }
 
   /* janela de terminal com barra de título */

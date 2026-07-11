@@ -1,21 +1,24 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAgents } from '../stores/agentStore'
 import { startRun, streamRun } from '../api/runs'
+import { listRuns } from '../api/agents'
+import LoadingComponent from '../components/LoadingComponent'
+import type { AgentRun } from '../types'
 
-type ChatMessage = { id: string; role: 'user' | 'agent' | 'system'; text: string; agentId?: number; agentName?: string }
-type Room = { id: string; name: string; agentIds: number[]; messages: ChatMessage[]; continuations: Record<number, number> }
-const KEY = 'agents-pool-chat-rooms'
+type Message = { id: string; role: 'user' | 'agent' | 'system'; text: string }
+type Chat = { id: string; agentId: number; title: string; messages: Message[]; continuationRunId?: number; sourceRunId?: number }
+const STORAGE_KEY = 'agents-pool-agent-chats-v2'
 
-const loadRooms = (): Room[] => {
-  try { return JSON.parse(localStorage.getItem(KEY) || '[]') } catch { return [] }
+function loadChats(): Chat[] {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') } catch { return [] }
 }
 
-function runAgent(agentId: number, prompt: string, continuation?: number) {
+function execute(agentId: number, prompt: string, continuationRunId?: number) {
   return new Promise<{ text: string; runId: number }>(async (resolve, reject) => {
     try {
-      const runId = await startRun(agentId, prompt, continuation)
+      const runId = await startRun(agentId, prompt, continuationRunId)
       let text = ''
-      streamRun(runId, (event) => {
+      streamRun(runId, event => {
         if (event.type === 'assistant') text += `${text ? '\n' : ''}${event.content}`
         if (event.type === 'done') resolve({ text: text || '(tarefa concluída sem resposta textual)', runId })
         if (event.type === 'error') reject(new Error(event.message))
@@ -24,87 +27,121 @@ function runAgent(agentId: number, prompt: string, continuation?: number) {
   })
 }
 
+function messagesFromRun(run: AgentRun): Message[] {
+  if (!run.messagesJson) return [{ id: `run-${run.id}-user`, role: 'user', text: run.inputPrompt }]
+  try {
+    return (JSON.parse(run.messagesJson) as Array<Record<string, unknown>>)
+      .filter(message => message.role === 'user' || (message.role === 'assistant' && message.content))
+      .map((message, index) => ({
+        id: `run-${run.id}-${index}`,
+        role: message.role === 'user' ? 'user' as const : 'agent' as const,
+        text: String(message.content || ''),
+      }))
+  } catch {
+    return [{ id: `run-${run.id}-user`, role: 'user', text: run.inputPrompt }]
+  }
+}
+
 export default function Chats() {
   const { agents, fetch } = useAgents()
-  const [rooms, setRooms] = useState<Room[]>(loadRooms)
-  const [activeId, setActiveId] = useState<string>()
-  const [selected, setSelected] = useState<number[]>([])
-  const [name, setName] = useState('')
+  const [chats, setChats] = useState<Chat[]>(loadChats)
+  const [agentId, setAgentId] = useState<number>()
+  const [chatId, setChatId] = useState<string>()
   const [prompt, setPrompt] = useState('')
-  const [running, setRunning] = useState(false)
-  const active = rooms.find(room => room.id === activeId)
-  const members = useMemo(() => active?.agentIds.map(id => agents.find(a => a.id === id)).filter(Boolean) ?? [], [active, agents])
+  const [runningAgentId, setRunningAgentId] = useState<number>()
+  const [runningCommand, setRunningCommand] = useState('')
 
   useEffect(() => { fetch() }, [fetch])
-  useEffect(() => { localStorage.setItem(KEY, JSON.stringify(rooms)) }, [rooms])
-  useEffect(() => { if (!activeId && rooms[0]) setActiveId(rooms[0].id) }, [rooms, activeId])
+  useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(chats)) }, [chats])
 
-  const createRoom = () => {
-    if (!selected.length) return
-    const room: Room = { id: crypto.randomUUID(), name: name.trim() || (selected.length === 1 ? agents.find(a => a.id === selected[0])?.name || 'Chat' : 'Equipe'), agentIds: selected, messages: [], continuations: {} }
-    setRooms(prev => [room, ...prev]); setActiveId(room.id); setName(''); setSelected([])
+  const selectedAgent = agents.find(agent => agent.id === agentId)
+  const agentChats = useMemo(() => chats.filter(chat => chat.agentId === agentId), [chats, agentId])
+  const activeChat = chats.find(chat => chat.id === chatId)
+
+  const openAgent = async (id: number) => {
+    setAgentId(id)
+    try {
+      const runs = await listRuns(id)
+      let nextChats = [...chats]
+      for (const run of runs.filter(item => item.status === 'DONE' && item.messagesJson)) {
+        const localMatch = nextChats.find(chat => chat.agentId === id && chat.continuationRunId === run.id)
+        if (localMatch) {
+          nextChats = nextChats.map(chat => chat.id === localMatch.id ? { ...chat, messages: messagesFromRun(run) } : chat)
+        } else if (!nextChats.some(chat => chat.sourceRunId === run.id)) {
+          nextChats.push({ id: `dashboard-run-${run.id}`, agentId: id, sourceRunId: run.id, continuationRunId: run.id, title: run.inputPrompt.slice(0, 36) || `Execução #${run.id}`, messages: messagesFromRun(run) })
+        }
+      }
+      let existing = nextChats.find(chat => chat.agentId === id)
+      if (!existing) {
+        existing = { id: crypto.randomUUID(), agentId: id, title: 'Conversa 1', messages: [] }
+        nextChats.push(existing)
+      }
+      setChats(nextChats); setChatId(existing.id)
+    } catch {
+      const existing = chats.find(chat => chat.agentId === id)
+      if (existing) setChatId(existing.id)
+      else {
+        const chat: Chat = { id: crypto.randomUUID(), agentId: id, title: 'Conversa 1', messages: [] }
+        setChats(previous => [...previous, chat]); setChatId(chat.id)
+      }
+    }
+  }
+
+  const newChat = () => {
+    if (!agentId) return
+    const chat: Chat = { id: crypto.randomUUID(), agentId, title: `Conversa ${agentChats.length + 1}`, messages: [] }
+    setChats(previous => [...previous, chat]); setChatId(chat.id); setPrompt('')
   }
 
   const send = async () => {
-    if (!active || !prompt.trim() || running) return
-    const task = prompt.trim(); setPrompt(''); setRunning(true)
-    let room = { ...active, messages: [...active.messages, { id: crypto.randomUUID(), role: 'user' as const, text: task }] }
-    setRooms(prev => prev.map(r => r.id === room.id ? room : r))
-    const colleagueAnswers: string[] = []
-    for (const member of members) {
-      if (!member?.id) continue
-      const context = colleagueAnswers.length
-        ? `${task}\n\nRespostas dos outros agentes nesta rodada:\n${colleagueAnswers.join('\n\n')}\n\nRevise, complemente ou corrija essas contribuições e entregue sua parte.`
-        : task
-      try {
-        const result = await runAgent(member.id, context, room.continuations[member.id])
-        colleagueAnswers.push(`${member.name}: ${result.text}`)
-        room = { ...room, continuations: { ...room.continuations, [member.id]: result.runId }, messages: [...room.messages, { id: crypto.randomUUID(), role: 'agent', agentId: member.id, agentName: member.name, text: result.text }] }
-      } catch (error: any) {
-        room = { ...room, messages: [...room.messages, { id: crypto.randomUUID(), role: 'system', agentName: member.name, text: `Erro: ${error.message}` }] }
-      }
-      setRooms(prev => prev.map(r => r.id === room.id ? room : r))
-    }
-    setRunning(false)
+    if (!activeChat || !prompt.trim() || runningAgentId) return
+    const command = prompt.trim()
+    setPrompt(''); setRunningAgentId(activeChat.agentId); setRunningCommand(command)
+    setChats(previous => previous.map(chat => chat.id === activeChat.id
+      ? { ...chat, title: chat.messages.length ? chat.title : command.slice(0, 36), messages: [...chat.messages, { id: crypto.randomUUID(), role: 'user', text: command }] }
+      : chat))
+    try {
+      const result = await execute(activeChat.agentId, command, activeChat.continuationRunId)
+      setChats(previous => previous.map(chat => chat.id === activeChat.id
+        ? { ...chat, continuationRunId: result.runId, messages: [...chat.messages, { id: crypto.randomUUID(), role: 'agent', text: result.text }] }
+        : chat))
+    } catch (error: any) {
+      setChats(previous => previous.map(chat => chat.id === activeChat.id
+        ? { ...chat, messages: [...chat.messages, { id: crypto.randomUUID(), role: 'system', text: `Erro: ${error.message}` }] }
+        : chat))
+    } finally { setRunningAgentId(undefined); setRunningCommand('') }
   }
 
-  return <div className="flex h-full min-h-0">
-    <section className="w-72 shrink-0 border-r border-term-border bg-black/20 p-4 overflow-y-auto">
-      <h1 className="text-lg font-bold mb-1"><span className="text-term-green">#</span> chats</h1>
-      <p className="text-[11px] text-term-muted mb-5">conversas individuais e equipes</p>
-      <input className="field mb-2" value={name} onChange={e => setName(e.target.value)} placeholder="nome da conversa" />
-      <div className="space-y-1 mb-3 max-h-44 overflow-y-auto">
-        {agents.map(agent => <label key={agent.id} className="flex gap-2 items-center text-xs p-2 rounded hover:bg-white/5 cursor-pointer">
-          <input type="checkbox" checked={selected.includes(agent.id!)} onChange={() => setSelected(s => s.includes(agent.id!) ? s.filter(id => id !== agent.id) : [...s, agent.id!])} />
-          <span style={{ color: agent.color }}>●</span>{agent.name}
-        </label>)}
-      </div>
-      <button className="btn btn-primary w-full mb-5" disabled={!selected.length} onClick={createRoom}>+ criar chat</button>
-      <div className="space-y-1">{rooms.map(room => <button key={room.id} onClick={() => setActiveId(room.id)} className={`w-full text-left rounded p-3 border ${room.id === activeId ? 'border-term-green/50 bg-term-green/10' : 'border-transparent hover:bg-white/5'}`}>
-        <div className="text-sm truncate">{room.name}</div><div className="text-[10px] text-term-muted">{room.agentIds.length} agente(s) · {room.messages.length} mensagens</div>
-      </button>)}</div>
-    </section>
-    <section className="flex-1 min-w-0 flex flex-col">
-      {!active ? <div className="m-auto text-center text-term-muted"><div className="text-3xl mb-3">⌁</div><p>Crie um chat e escolha um ou mais agentes.</p></div> : <>
-        <header className="px-6 py-4 border-b border-term-border bg-black/10 flex items-center gap-3">
-          <div><h2 className="font-bold">{active.name}</h2><p className="text-[11px] text-term-muted">{members.map(a => a?.name).join(' · ')}</p></div>
-          <button className="btn btn-ghost ml-auto" disabled={running} onClick={() => setRooms(rs => rs.filter(r => r.id !== active.id))}>excluir</button>
-        </header>
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {!active.messages.length && <p className="text-center text-term-muted mt-16">Envie uma tarefa. Os agentes responderão em turnos e considerarão as respostas da equipe.</p>}
-          {active.messages.map(message => <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[78%] rounded-lg border px-4 py-3 ${message.role === 'user' ? 'border-term-green/30 bg-term-green/10' : message.role === 'system' ? 'border-term-red/30 bg-term-red/10' : 'border-term-border bg-term-panel/90'}`}>
-              <div className="text-[10px] uppercase tracking-widest text-term-muted mb-1">{message.role === 'user' ? 'você' : message.agentName || 'sistema'}</div>
-              <div className="text-sm whitespace-pre-wrap leading-relaxed">{message.text}</div>
-            </div>
-          </div>)}
-          {running && <div className="text-xs text-term-amber animate-pulse">agentes trabalhando em conjunto...</div>}
-        </div>
-        <div className="p-4 border-t border-term-border flex gap-2 bg-black/20">
-          <textarea className="field min-h-12 max-h-36 resize-y" value={prompt} onChange={e => setPrompt(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} placeholder="Envie uma mensagem ou comando..." disabled={running} />
-          <button className="btn btn-primary px-6" onClick={send} disabled={running || !prompt.trim()}>enviar</button>
-        </div>
-      </>}
-    </section>
+  if (!selectedAgent) return <div className="p-8 w-full">
+    <div className="mb-6"><h1 className="text-2xl font-bold"><span className="text-term-green">#</span> chats</h1><p className="text-sm text-term-muted mt-1">Selecione um agente para abrir suas conversas.</p></div>
+    <div className="space-y-3">
+      {agents.map(agent => {
+        const running = runningAgentId === agent.id
+        return <button key={agent.id} onClick={() => openAgent(agent.id!)} className="panel w-full h-28 px-5 text-left flex items-center gap-5 transition-all hover:border-term-green/60 hover:bg-term-panel/95">
+          <div className="w-20 h-full shrink-0 flex items-center justify-center border-r border-term-border pr-5">
+            {running ? <LoadingComponent size={0.54} /> : <div className="w-12 h-12 rounded-full border flex items-center justify-center font-bold" style={{ color: agent.color, borderColor: `${agent.color}66`, backgroundColor: `${agent.color}16` }}>{agent.emoji || agent.name.slice(0, 2).toUpperCase()}</div>}
+          </div>
+          <div className="min-w-0 flex-1"><div className="font-semibold text-lg truncate">{agent.name}</div>{running && <div className="text-sm text-term-muted truncate mt-2"><span className="text-term-green animate-pulse mr-2">...</span>{runningCommand}</div>}</div>
+          <span className="text-term-muted text-xl">›</span>
+        </button>
+      })}
+      {!agents.length && <div className="panel p-10 text-center text-term-muted">Nenhum agente criado.</div>}
+    </div>
+  </div>
+
+  return <div className="h-full min-h-0 flex flex-col">
+    <header className="shrink-0 px-6 py-4 border-b border-term-border bg-black/20 flex items-center gap-3">
+      <button className="btn btn-ghost" onClick={() => { setAgentId(undefined); setChatId(undefined) }}>← agentes</button>
+      <div className="w-10 h-10 rounded-full border flex items-center justify-center font-bold" style={{ color: selectedAgent.color, borderColor: `${selectedAgent.color}66` }}>{selectedAgent.emoji || selectedAgent.name.slice(0, 2).toUpperCase()}</div>
+      <div><h1 className="font-bold">{selectedAgent.name}</h1><p className="text-[10px] text-term-muted uppercase tracking-widest">chat com agente</p></div>
+      <select className="field max-w-72 ml-auto" value={chatId} onChange={event => setChatId(event.target.value)}>{agentChats.map(chat => <option key={chat.id} value={chat.id}>{chat.title}</option>)}</select>
+      <button className="btn btn-primary" onClick={newChat} disabled={!!runningAgentId}>+ novo chat</button>
+    </header>
+    <main className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
+      {!activeChat?.messages.length && <div className="h-full grid place-items-center text-term-muted"><p>Envie um comando para {selectedAgent.name}.</p></div>}
+      {activeChat?.messages.map(message => <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[75%] rounded-lg border px-4 py-3 ${message.role === 'user' ? 'border-term-green/30 bg-term-green/10' : message.role === 'system' ? 'border-term-red/30 bg-term-red/10' : 'border-term-border bg-term-panel/90'}`}><div className="text-[10px] uppercase tracking-widest text-term-muted mb-1">{message.role === 'user' ? 'você' : message.role === 'agent' ? selectedAgent.name : 'sistema'}</div><div className="text-sm whitespace-pre-wrap leading-relaxed">{message.text}</div></div></div>)}
+      {runningAgentId && <div className="flex items-center gap-3 text-sm text-term-muted"><LoadingComponent size={0.3} /><span><span className="text-term-green animate-pulse">...</span> {runningCommand}</span></div>}
+    </main>
+    <footer className="shrink-0 p-4 border-t border-term-border bg-black/20 flex gap-2"><textarea className="field min-h-12 max-h-32 resize-y" value={prompt} onChange={event => setPrompt(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send() } }} placeholder="Digite um comando..." disabled={!!runningAgentId} /><button className="btn btn-primary px-6" onClick={send} disabled={!prompt.trim() || !!runningAgentId}>enviar</button></footer>
   </div>
 }

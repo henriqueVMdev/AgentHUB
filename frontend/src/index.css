@@ -77,7 +77,7 @@
   /* Chuva luminosa do Pattern enviado, adaptada aos tokens dos temas. */
   .cool-rain {
     --rain-color: rgb(var(--term-green));
-    opacity: 0.42;
+    opacity: 0.58;
     background-color: rgb(var(--term-bg));
     background-image:
       radial-gradient(4px 100px at 0 235px, var(--rain-color), transparent),
@@ -105,7 +105,7 @@
     inset: 0;
     background-image: radial-gradient(circle, transparent 0 2px, rgb(var(--term-bg) / 0.82) 2px);
     background-size: 8px 8px;
-    backdrop-filter: blur(1.15em) brightness(2.2);
+    backdrop-filter: blur(1.05em) brightness(2.75) saturate(1.15);
   }
 
   @keyframes coolRainFall {

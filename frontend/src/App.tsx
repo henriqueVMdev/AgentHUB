@@ -8,6 +8,7 @@ import Models from './pages/Models'
 import ModelDetails from './pages/ModelDetails'
 import Settings from './pages/Settings'
 import Skills from './pages/Skills'
+import Chats from './pages/Chats'
 import { useTheme } from './stores/themeStore'
 import { applyVars, themes } from './themes'
 import CoolBackground from './components/coolBackground'
@@ -56,6 +57,7 @@ export default function App() {
         </div>
         <NavItem to="/">dashboard</NavItem>
         <NavItem to="/agents/new">new_agent</NavItem>
+        <NavItem to="/chats">chats</NavItem>
         <NavItem to="/models">models</NavItem>
         <NavItem to="/skills">skills</NavItem>
         <NavItem to="/settings">settings</NavItem>
@@ -65,6 +67,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/agents/new" element={<AgentBuilder />} />
+          <Route path="/chats" element={<Chats />} />
           <Route path="/agents/:id/edit" element={<AgentBuilder />} />
           <Route path="/agents/:id/run" element={<AgentRunner />} />
           <Route path="/agents/:id/runs" element={<RunHistory />} />

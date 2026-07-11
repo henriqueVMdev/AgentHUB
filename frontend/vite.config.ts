@@ -7,7 +7,7 @@ export default defineConfig({
     port: 5290,
     strictPort: true, // porta dedicada — falha em vez de migrar silenciosamente se ocupada
     proxy: {
-      '/api': 'http://localhost:8080',
+      '/api': 'http://localhost:8081',
     },
   },
 })

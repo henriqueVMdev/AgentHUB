@@ -124,20 +124,9 @@ const StyledWrapper = styled.div<{ $maskId: string }>`
   }
 
   .loader--idle {
+    --time-animation: 10s;
     animation: none;
-    opacity: .42;
-  }
-
-  .loader--idle::before {
-    background: var(--agent-color);
-    border: 1px solid color-mix(in srgb, var(--agent-color) 65%, white);
-    box-shadow: inset 0 8px 12px color-mix(in srgb, var(--agent-color) 55%, white),
-      inset 0 -10px 14px color-mix(in srgb, var(--agent-color) 55%, black);
-  }
-
-  .loader--idle .box,
-  .loader--idle svg {
-    display: none;
+    opacity: .58;
   }
 
   @keyframes rotation {

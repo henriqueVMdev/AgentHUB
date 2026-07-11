@@ -1,5 +1,6 @@
 server:
-  port: 8080
+  # 8081: no Windows a porta 8080 costuma ser ocupada por serviços de fabricante (ex.: MTAgentService)
+  port: 8081
 
 spring:
   datasource:

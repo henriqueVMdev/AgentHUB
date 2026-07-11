@@ -3,8 +3,8 @@
 Painel de controle para agentes de IA. React 18 + Vite + TypeScript + Tailwind (frontend), Spring Boot 3 + Java 21 (backend).
 
 ## Stack
-- Backend: porta 8080, profile `dev` usa H2 in-memory
-- Frontend: porta 5173, proxy `/api` → `localhost:8080`
+- Backend: porta 8081 (a 8080 é ocupada pelo MTAgentService do Windows), profile `dev` usa H2 em arquivo
+- Frontend: porta 5290, proxy `/api` → `localhost:8081`
 - LLM: qualquer endpoint OpenAI-compatible (OpenRouter ou local — Ollama, LM Studio, vLLM)
 
 ## Rodar em dev

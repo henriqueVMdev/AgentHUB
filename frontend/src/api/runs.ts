@@ -18,10 +18,15 @@ export function streamRun(runId: number, onEvent: (e: StreamEvent) => void): () 
   on('tool_call', d => ({ type: 'tool_call', name: d.name, args: d.args }))
   on('tool_result', d => ({ type: 'tool_result', name: d.name, result: d.result }))
   on('done', () => ({ type: 'done' }))
-  on('error', d => ({ type: 'error', message: d.message }))
 
   es.addEventListener('done', () => es.close())
-  es.addEventListener('error', () => es.close())
+  // 'error' também é o evento nativo de falha de conexão (sem data) — sem tratá-lo a promise de quem consome nunca resolve
+  es.addEventListener('error', (ev: MessageEvent) => {
+    es.close()
+    let message = 'conexão com o backend perdida'
+    try { message = JSON.parse(ev.data).message || message } catch { /* evento nativo, sem data */ }
+    onEvent({ type: 'error', message })
+  })
 
   return () => es.close()
 }

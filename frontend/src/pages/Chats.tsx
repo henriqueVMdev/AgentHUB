@@ -75,6 +75,9 @@ export default function Chats() {
   const selectedAgent = agents.find(agent => agent.id === agentId)
   const agentChats = useMemo(() => chats.filter(chat => chat.agentId === agentId), [chats, agentId])
   const activeChat = chats.find(chat => chat.id === chatId)
+  const selectedActiveRun = agentId ? activeRuns[agentId] : undefined
+  const selectedAgentRunning = !!agentId && (runningAgentId === agentId || !!selectedActiveRun)
+  const selectedCommand = runningAgentId === agentId ? runningCommand : selectedActiveRun?.inputPrompt || ''
 
   const openAgent = async (id: number) => {
     setAgentId(id)
@@ -152,7 +155,7 @@ export default function Chats() {
         return <button key={agent.id} onClick={() => openAgent(agent.id!)} className="panel w-full h-28 px-5 text-left flex items-center gap-5 transition-all hover:border-term-green/60 hover:bg-term-panel/95">
           <div className="w-14 h-14 rounded-full border flex items-center justify-center font-bold shrink-0" style={{ color: agent.color, borderColor: `${agent.color}66`, backgroundColor: `${agent.color}16` }}>{agent.emoji || agent.name.slice(0, 2).toUpperCase()}</div>
           <div className="min-w-0 flex-1"><div className="font-semibold text-lg truncate">{agent.name}</div>{running && <div className="truncate mt-1"><ThinkingAnimation label={currentCommand} /></div>}</div>
-          <div className="w-20 h-full shrink-0 flex items-center justify-center border-l border-term-border pl-5">{running ? <LoadingComponent size={0.54} /> : <span className="text-term-muted text-xl">›</span>}</div>
+          <div className="w-20 h-full shrink-0 flex items-center justify-center border-l border-term-border pl-5">{running ? <LoadingComponent size={0.54} color={agent.color} /> : <span className="text-term-muted text-xl">›</span>}</div>
         </button>
       })}
       {!agents.length && <div className="panel p-10 text-center text-term-muted">Nenhum agente criado.</div>}
@@ -170,8 +173,8 @@ export default function Chats() {
     <main className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
       {!activeChat?.messages.length && <div className="h-full grid place-items-center text-term-muted"><p>Envie um comando para {selectedAgent.name}.</p></div>}
       {activeChat?.messages.map(message => <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[75%] rounded-lg border px-4 py-3 ${message.role === 'user' ? 'border-term-green/30 bg-term-green/10' : message.role === 'system' ? 'border-term-red/30 bg-term-red/10' : 'border-term-border bg-term-panel/90'}`}><div className="text-[10px] uppercase tracking-widest text-term-muted mb-1">{message.role === 'user' ? 'você' : message.role === 'agent' ? selectedAgent.name : 'sistema'}</div><div className="text-sm whitespace-pre-wrap leading-relaxed">{message.text}</div></div></div>)}
-      {runningAgentId && <ThinkingAnimation label={runningCommand} />}
+      {selectedAgentRunning && <div className="animate-fadeIn border-l-2 border-term-green/40 pl-4"><ThinkingAnimation label="processing" /><p className="text-xs text-term-muted truncate pb-2">{selectedCommand}</p></div>}
     </main>
-    <footer className="shrink-0 p-4 border-t border-term-border bg-black/20 flex gap-2"><textarea className="field min-h-12 max-h-32 resize-y" value={prompt} onChange={event => setPrompt(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send() } }} placeholder="Digite um comando..." disabled={!!runningAgentId} /><button className="btn btn-primary px-6" onClick={send} disabled={!prompt.trim() || !!runningAgentId}>enviar</button></footer>
+    <footer className="shrink-0 p-4 border-t border-term-border bg-black/20 flex gap-2"><textarea className="field min-h-12 max-h-32 resize-y" value={prompt} onChange={event => setPrompt(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send() } }} placeholder={selectedAgentRunning ? 'Aguarde o agente responder...' : 'Digite um comando...'} disabled={selectedAgentRunning} /><button className="btn btn-primary px-6" onClick={send} disabled={!prompt.trim() || selectedAgentRunning}>enviar</button></footer>
   </div>
 }

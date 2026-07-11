@@ -1,11 +1,11 @@
 import { useId, type CSSProperties } from 'react';
 import styled from 'styled-components';
 
-const Loader = ({ size = 1 }: { size?: number }) => {
+const Loader = ({ size = 1, color = '#ffbf48' }: { size?: number; color?: string }) => {
   const maskId = `clipping-${useId().replace(/:/g, '')}`;
   return (
     <StyledWrapper $maskId={maskId}>
-      <div className="loader" style={{ '--size': size } as CSSProperties}>
+      <div className="loader" style={{ '--size': size, '--agent-color': color } as CSSProperties}>
         <svg width={100} height={100} viewBox="0 0 100 100">
           <defs>
             <mask id={maskId}>
@@ -27,11 +27,11 @@ const Loader = ({ size = 1 }: { size?: number }) => {
 
 const StyledWrapper = styled.div<{ $maskId: string }>`
   .loader {
-    --color-one: #ffbf48;
-    --color-two: #be4a1d;
-    --color-three: #ffbf4780;
-    --color-four: #bf4a1d80;
-    --color-five: #ffbf4740;
+    --color-one: color-mix(in srgb, var(--agent-color) 72%, white);
+    --color-two: color-mix(in srgb, var(--agent-color) 68%, black);
+    --color-three: color-mix(in srgb, var(--agent-color) 55%, transparent);
+    --color-four: color-mix(in srgb, var(--color-two) 55%, transparent);
+    --color-five: color-mix(in srgb, var(--color-one) 28%, transparent);
     --time-animation: 2s;
     --size: 1;
     width: calc(100px * var(--size));
@@ -40,9 +40,7 @@ const StyledWrapper = styled.div<{ $maskId: string }>`
     position: relative;
     border-radius: 50%;
     transform: scale(var(--size));
-    box-shadow:
-      0 0 25px 0 var(--color-three),
-      0 20px 50px 0 var(--color-four);
+    box-shadow: none;
     animation: colorize calc(var(--time-animation) * 3) ease-in-out infinite;
   }
 

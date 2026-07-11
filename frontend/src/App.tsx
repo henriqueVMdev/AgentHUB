@@ -10,6 +10,7 @@ import Settings from './pages/Settings'
 import Skills from './pages/Skills'
 import { useTheme } from './stores/themeStore'
 import { applyVars, themes } from './themes'
+import CoolBackground from './components/coolBackground'
 
 function NavItem({ to, children }: { to: string; children: string }) {
   return (
@@ -42,8 +43,9 @@ export default function App() {
   }, [themeId, customThemes])
 
   return (
-    <div className="flex h-screen">
-      <aside className="w-60 shrink-0 border-r border-term-border p-4 flex flex-col gap-1 bg-black/20">
+    <div className="relative isolate flex h-screen overflow-hidden">
+      <CoolBackground />
+      <aside className="relative z-10 w-60 shrink-0 border-r border-term-border p-4 flex flex-col gap-1 bg-black/20 backdrop-blur-sm">
         <div className="px-3 py-2 mb-3">
           <div className="text-lg font-bold tracking-tight">
             <span className="text-term-text">agents</span>
@@ -59,7 +61,7 @@ export default function App() {
         <NavItem to="/settings">settings</NavItem>
         <div className="mt-auto px-3 text-[10px] text-term-muted/60 tracking-widest">v0.1.0</div>
       </aside>
-      <main className="flex-1 overflow-y-auto">
+      <main className="relative z-10 flex-1 overflow-y-auto">
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/agents/new" element={<AgentBuilder />} />

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getAgent } from '../api/agents'
+import { getAgent, listRuns } from '../api/agents'
 import { startRun, streamRun } from '../api/runs'
 import MessageStream, { type StreamItem } from '../components/MessageStream'
 import { TermInput } from '../components/ui'
@@ -13,14 +13,56 @@ export default function AgentRunner() {
   const [prompt, setPrompt] = useState('')
   const [items, setItems] = useState<StreamItem[]>([])
   const [running, setRunning] = useState(false)
+  const [continuationRunId, setContinuationRunId] = useState<number | undefined>()
 
-  useEffect(() => { getAgent(Number(id)).then(setAgent) }, [id])
+  useEffect(() => {
+    Promise.all([getAgent(Number(id)), listRuns(Number(id))]).then(([loadedAgent, runs]) => {
+      setAgent(loadedAgent)
+      const latest = runs.find((candidate) => candidate.status === 'DONE' && candidate.messagesJson)
+      if (latest) {
+        setContinuationRunId(latest.id)
+        setItems(parseConversation(latest.messagesJson!))
+      }
+    })
+  }, [id])
+
+  const parseConversation = (raw: string): StreamItem[] => {
+    try {
+      const messages = JSON.parse(raw) as Array<Record<string, any>>
+      const result: StreamItem[] = []
+      const calls = new Map<string, number>()
+      messages.forEach((message) => {
+        if (message.role === 'user') result.push({ kind: 'user', text: String(message.content ?? '') })
+        if (message.role === 'assistant') {
+          if (message.content) result.push({ kind: 'text', text: String(message.content) })
+          if (Array.isArray(message.tool_calls)) message.tool_calls.forEach((call: any) => {
+            const index = result.push({ kind: 'tool', call: {
+              name: call.function?.name ?? 'tool', args: call.function?.arguments ?? '{}',
+            } }) - 1
+            if (call.id) calls.set(call.id, index)
+          })
+        }
+        if (message.role === 'tool') {
+          const index = calls.get(message.tool_call_id)
+          const item = index === undefined ? undefined : result[index]
+          if (item?.kind === 'tool') result[index!] = {
+            kind: 'tool', call: { ...item.call, result: String(message.content ?? '') },
+          }
+        }
+      })
+      return result
+    } catch {
+      return []
+    }
+  }
 
   const run = async () => {
     if (!prompt.trim() || running) return
-    setItems([]); setRunning(true)
+    const sentPrompt = prompt.trim()
+    setItems((previous) => [...previous, { kind: 'user', text: sentPrompt }]); setRunning(true); setPrompt('')
     try {
-      const runId = await startRun(Number(id), prompt)
+      const runId = await startRun(Number(id), sentPrompt, continuationRunId)
+      setContinuationRunId(runId)
       streamRun(runId, (e) => {
         setItems((prev) => {
           const next = [...prev]
@@ -47,9 +89,16 @@ export default function AgentRunner() {
         if (e.type === 'done' || e.type === 'error') setRunning(false)
       })
     } catch (err: any) {
-      setItems([{ kind: 'text', text: `[error] ${err.message}` }])
+      setItems((previous) => [...previous, { kind: 'text', text: `[error] ${err.message}` }])
       setRunning(false)
     }
+  }
+
+  const newConversation = () => {
+    if (running) return
+    setItems([])
+    setContinuationRunId(undefined)
+    setPrompt('')
   }
 
   if (!agent) return <div className="p-8 text-term-dim">loading<span className="animate-blink">_</span></div>
@@ -73,6 +122,7 @@ export default function AgentRunner() {
             {agent.modelId} · {running ? <span className="text-term-amber">executing</span> : <span className="text-term-dim">ready</span>}
           </div>
         </div>
+        <button onClick={newConversation} disabled={running} className="btn btn-ghost ml-auto">+ nova conversa</button>
       </div>
 
       <div className="flex gap-2 mb-6">
@@ -82,7 +132,7 @@ export default function AgentRunner() {
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && run()}
           disabled={running}
-          placeholder="descreva a tarefa e pressione enter"
+          placeholder={items.length ? 'responda ao agente e pressione enter' : 'descreva a tarefa e pressione enter'}
           className="flex-1"
         />
         <button onClick={run} disabled={running} className="btn btn-primary px-6">{running ? '...' : 'run'}</button>
@@ -96,7 +146,7 @@ export default function AgentRunner() {
         </div>
         <div className="p-5 min-h-[18rem] text-sm">
           {items.length === 0 && !running && (
-            <p className="text-term-muted/70">// aguardando comando<span className="animate-blink text-term-green">▋</span></p>
+            <p className="text-term-muted/70">// inicie uma conversa<span className="animate-blink text-term-green">▋</span></p>
           )}
           <MessageStream items={items} running={running} />
         </div>

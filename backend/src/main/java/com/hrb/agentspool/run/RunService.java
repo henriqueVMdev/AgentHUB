@@ -89,9 +89,11 @@ public class RunService {
         try {
             AgentConfig agent = agents.findById(req.agentId).orElseThrow();
 
-            ArrayNode messages = mapper.createArrayNode();
-            String systemPrompt = buildSystemPrompt(agent);
-            if (!systemPrompt.isBlank()) messages.add(msg("system", systemPrompt));
+            ArrayNode messages = previousMessages(req, agent);
+            if (messages.isEmpty()) {
+                String systemPrompt = buildSystemPrompt(agent);
+                if (!systemPrompt.isBlank()) messages.add(msg("system", systemPrompt));
+            }
             messages.add(msg("user", req.prompt));
 
             // Hermes e OpenClaw executam o próprio loop e suas próprias ferramentas no gateway.
@@ -155,6 +157,21 @@ public class RunService {
         m.put("role", role);
         m.put("content", content);
         return m;
+    }
+
+    private ArrayNode previousMessages(StartRunRequest req, AgentConfig agent) {
+        if (req.continuationRunId == null) return mapper.createArrayNode();
+        return runs.findById(req.continuationRunId)
+                .filter(previous -> previous.getAgentId().equals(agent.getId()))
+                .filter(previous -> previous.getMessagesJson() != null && !previous.getMessagesJson().isBlank())
+                .map(previous -> {
+                    try {
+                        JsonNode parsed = mapper.readTree(previous.getMessagesJson());
+                        return parsed.isArray() ? (ArrayNode) parsed.deepCopy() : mapper.createArrayNode();
+                    } catch (Exception ignored) {
+                        return mapper.createArrayNode();
+                    }
+                }).orElseGet(mapper::createArrayNode);
     }
 
     private String buildSystemPrompt(AgentConfig agent) {

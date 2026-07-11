@@ -53,6 +53,82 @@
     0%, 100% { box-shadow: 0 0 0 1px rgb(var(--term-green) / 0.25); }
     50% { box-shadow: 0 0 24px -2px rgb(var(--term-green) / 0.55); }
   }
+
+  @keyframes coolBackgroundFloat {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    33% { transform: translate3d(8vw, 6vh, 0) scale(1.12); }
+    66% { transform: translate3d(-5vw, 10vh, 0) scale(0.92); }
+  }
+
+  @keyframes coolBackgroundDrift {
+    from { transform: translate3d(-4vw, -3vh, 0) rotate(0deg); }
+    to { transform: translate3d(6vw, 7vh, 0) rotate(18deg); }
+  }
+
+  .cool-background {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+    background: rgb(var(--term-bg));
+  }
+
+  .cool-background__orb {
+    position: absolute;
+    width: 52vw;
+    height: 52vw;
+    min-width: 30rem;
+    min-height: 30rem;
+    border-radius: 9999px;
+    filter: blur(90px);
+    opacity: 0.16;
+    will-change: transform;
+    animation: coolBackgroundFloat 20s ease-in-out infinite;
+  }
+
+  .cool-background__orb--primary {
+    top: -28%;
+    left: -12%;
+    background: rgb(var(--term-green));
+  }
+
+  .cool-background__orb--secondary {
+    right: -18%;
+    bottom: -35%;
+    background: rgb(var(--term-cyan));
+    animation-delay: -7s;
+    animation-duration: 25s;
+  }
+
+  .cool-background__orb--accent {
+    top: 28%;
+    left: 38%;
+    width: 30vw;
+    height: 30vw;
+    min-width: 20rem;
+    min-height: 20rem;
+    background: rgb(var(--term-dim));
+    opacity: 0.11;
+    animation: coolBackgroundDrift 18s ease-in-out infinite alternate;
+  }
+
+  .cool-background__noise {
+    position: absolute;
+    inset: -15%;
+    opacity: 0.16;
+    background-image:
+      linear-gradient(rgb(var(--term-green) / 0.12) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(var(--term-green) / 0.12) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(circle at center, black, transparent 75%);
+    animation: coolBackgroundDrift 28s ease-in-out infinite alternate;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cool-background__orb,
+    .cool-background__noise { animation: none; }
+  }
 }
 
 @layer components {

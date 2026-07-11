@@ -4,6 +4,7 @@ public class StartRunRequest {
     public Long agentId;
     public String prompt;
     public String apiKey;   // compatibilidade com clientes antigos; credenciais novas ficam no backend
+    public Long continuationRunId;
 
     public Long getAgentId() { return agentId; }
     public void setAgentId(Long agentId) { this.agentId = agentId; }
@@ -11,4 +12,6 @@ public class StartRunRequest {
     public void setPrompt(String prompt) { this.prompt = prompt; }
     public String getApiKey() { return apiKey; }
     public void setApiKey(String apiKey) { this.apiKey = apiKey; }
+    public Long getContinuationRunId() { return continuationRunId; }
+    public void setContinuationRunId(Long continuationRunId) { this.continuationRunId = continuationRunId; }
 }

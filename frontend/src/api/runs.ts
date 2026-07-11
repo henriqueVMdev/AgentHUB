@@ -1,8 +1,8 @@
 import { api } from './client'
 import type { StreamEvent } from '../types'
 
-export const startRun = (agentId: number, prompt: string) =>
-  api.post<{ runId: number }>('/runs/start', { agentId, prompt }).then(r => r.data.runId)
+export const startRun = (agentId: number, prompt: string, continuationRunId?: number) =>
+  api.post<{ runId: number }>('/runs/start', { agentId, prompt, continuationRunId }).then(r => r.data.runId)
 
 /**
  * Abre o SSE do run e chama onEvent para cada evento até 'done'/'error'.

@@ -50,9 +50,26 @@ export default function Chats() {
   const [prompt, setPrompt] = useState('')
   const [runningAgentId, setRunningAgentId] = useState<number>()
   const [runningCommand, setRunningCommand] = useState('')
+  const [activeRuns, setActiveRuns] = useState<Record<number, AgentRun>>({})
 
   useEffect(() => { fetch() }, [fetch])
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(chats)) }, [chats])
+  useEffect(() => {
+    if (!agents.length) return
+    let mounted = true
+    const refresh = async () => {
+      const entries = await Promise.all(agents.map(async agent => {
+        try {
+          const runs = await listRuns(agent.id!)
+          return [agent.id!, runs.find(run => run.status === 'RUNNING')] as const
+        } catch { return [agent.id!, undefined] as const }
+      }))
+      if (mounted) setActiveRuns(Object.fromEntries(entries.filter((entry): entry is readonly [number, AgentRun] => !!entry[1])))
+    }
+    refresh()
+    const timer = window.setInterval(refresh, 2500)
+    return () => { mounted = false; window.clearInterval(timer) }
+  }, [agents])
 
   const selectedAgent = agents.find(agent => agent.id === agentId)
   const agentChats = useMemo(() => chats.filter(chat => chat.agentId === agentId), [chats, agentId])
@@ -63,7 +80,7 @@ export default function Chats() {
     try {
       const runs = await listRuns(id)
       let nextChats = [...chats]
-      for (const run of runs.filter(item => item.status === 'DONE' && item.messagesJson)) {
+      for (const run of runs.filter(item => item.status === 'RUNNING' || (item.status === 'DONE' && item.messagesJson))) {
         const localMatch = nextChats.find(chat => chat.agentId === id && chat.continuationRunId === run.id)
         if (localMatch) {
           nextChats = nextChats.map(chat => chat.id === localMatch.id ? { ...chat, messages: messagesFromRun(run) } : chat)
@@ -97,9 +114,12 @@ export default function Chats() {
     if (!activeChat || !prompt.trim() || runningAgentId) return
     const command = prompt.trim()
     setPrompt(''); setRunningAgentId(activeChat.agentId); setRunningCommand(command)
-    setChats(previous => previous.map(chat => chat.id === activeChat.id
-      ? { ...chat, title: chat.messages.length ? chat.title : command.slice(0, 36), messages: [...chat.messages, { id: crypto.randomUUID(), role: 'user', text: command }] }
-      : chat))
+    const userMessage: Message = { id: crypto.randomUUID(), role: 'user', text: command }
+    const chatsWithCommand = chats.map(chat => chat.id === activeChat.id
+      ? { ...chat, title: chat.messages.length ? chat.title : command.slice(0, 36), messages: [...chat.messages, userMessage] }
+      : chat)
+    setChats(chatsWithCommand)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(chatsWithCommand))
     try {
       const result = await execute(activeChat.agentId, command, activeChat.continuationRunId)
       setChats(previous => previous.map(chat => chat.id === activeChat.id
@@ -116,12 +136,14 @@ export default function Chats() {
     <div className="mb-6"><h1 className="text-2xl font-bold"><span className="text-term-green">#</span> chats</h1><p className="text-sm text-term-muted mt-1">Selecione um agente para abrir suas conversas.</p></div>
     <div className="space-y-3">
       {agents.map(agent => {
-        const running = runningAgentId === agent.id
+        const backendRun = activeRuns[agent.id!]
+        const running = runningAgentId === agent.id || !!backendRun
+        const currentCommand = runningAgentId === agent.id ? runningCommand : backendRun?.inputPrompt || ''
         return <button key={agent.id} onClick={() => openAgent(agent.id!)} className="panel w-full h-28 px-5 text-left flex items-center gap-5 transition-all hover:border-term-green/60 hover:bg-term-panel/95">
           <div className="w-20 h-full shrink-0 flex items-center justify-center border-r border-term-border pr-5">
             {running ? <LoadingComponent size={0.54} /> : <div className="w-12 h-12 rounded-full border flex items-center justify-center font-bold" style={{ color: agent.color, borderColor: `${agent.color}66`, backgroundColor: `${agent.color}16` }}>{agent.emoji || agent.name.slice(0, 2).toUpperCase()}</div>}
           </div>
-          <div className="min-w-0 flex-1"><div className="font-semibold text-lg truncate">{agent.name}</div>{running && <div className="text-sm text-term-muted truncate mt-2"><span className="text-term-green animate-pulse mr-2">...</span>{runningCommand}</div>}</div>
+          <div className="min-w-0 flex-1"><div className="font-semibold text-lg truncate">{agent.name}</div>{running && <div className="text-sm text-term-muted truncate mt-2"><span className="text-term-green animate-pulse mr-2">...</span>{currentCommand}</div>}</div>
           <span className="text-term-muted text-xl">›</span>
         </button>
       })}

@@ -154,8 +154,16 @@ export default function Chats() {
         const currentCommand = runningAgentId === agent.id ? runningCommand : backendRun?.inputPrompt || ''
         return <button key={agent.id} onClick={() => openAgent(agent.id!)} className="panel w-full h-28 px-5 text-left flex items-center gap-5 transition-all hover:border-term-green/60 hover:bg-term-panel/95">
           <div className="w-14 h-14 rounded-full border flex items-center justify-center font-bold shrink-0" style={{ color: agent.color, borderColor: `${agent.color}66`, backgroundColor: `${agent.color}16` }}>{agent.emoji || agent.name.slice(0, 2).toUpperCase()}</div>
-          <div className="min-w-0 flex-1"><div className="font-semibold text-lg truncate">{agent.name}</div>{running && <div className="truncate mt-1"><ThinkingAnimation label={currentCommand} /></div>}</div>
-          <div className="w-20 h-full shrink-0 flex items-center justify-center border-l border-term-border pl-5">{running ? <LoadingComponent size={0.54} color={agent.color} /> : <span className="text-term-muted text-xl">›</span>}</div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="font-semibold text-lg truncate">{agent.name}</div>
+              <div className="flex gap-1 shrink-0">
+                {agent.enabledTools.map(tool => <span key={tool} className="badge border-term-border text-term-dim">{tool}</span>)}
+              </div>
+            </div>
+            {running && <div className="truncate mt-1"><ThinkingAnimation label={currentCommand} /></div>}
+          </div>
+          <div className="w-20 h-full shrink-0 flex items-center justify-center border-l border-term-border pl-5"><LoadingComponent size={0.54} color={agent.color} active={running} /></div>
         </button>
       })}
       {!agents.length && <div className="panel p-10 text-center text-term-muted">Nenhum agente criado.</div>}

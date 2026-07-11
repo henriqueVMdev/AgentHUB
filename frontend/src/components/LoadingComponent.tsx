@@ -1,11 +1,11 @@
 import { useId, type CSSProperties } from 'react';
 import styled from 'styled-components';
 
-const Loader = ({ size = 1, color = '#ffbf48' }: { size?: number; color?: string }) => {
+const Loader = ({ size = 1, color = '#ffbf48', active = true }: { size?: number; color?: string; active?: boolean }) => {
   const maskId = `clipping-${useId().replace(/:/g, '')}`;
   return (
     <StyledWrapper $maskId={maskId}>
-      <div className="loader" style={{ '--size': size, '--agent-color': color } as CSSProperties}>
+      <div className={`loader ${active ? '' : 'loader--idle'}`} style={{ '--size': size, '--agent-color': color } as CSSProperties}>
         <svg width={100} height={100} viewBox="0 0 100 100">
           <defs>
             <mask id={maskId}>
@@ -121,6 +121,23 @@ const StyledWrapper = styled.div<{ $maskId: string }>`
     transform-origin: 60% 40%;
     animation: rotation var(--time-animation) linear infinite;
     animation-delay: calc(var(--time-animation) / -1.5);
+  }
+
+  .loader--idle {
+    animation: none;
+    opacity: .42;
+  }
+
+  .loader--idle::before {
+    background: var(--agent-color);
+    border: 1px solid color-mix(in srgb, var(--agent-color) 65%, white);
+    box-shadow: inset 0 8px 12px color-mix(in srgb, var(--agent-color) 55%, white),
+      inset 0 -10px 14px color-mix(in srgb, var(--agent-color) 55%, black);
+  }
+
+  .loader--idle .box,
+  .loader--idle svg {
+    display: none;
   }
 
   @keyframes rotation {

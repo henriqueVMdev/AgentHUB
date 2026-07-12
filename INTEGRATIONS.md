@@ -9,7 +9,9 @@
 - Caixa de entrada unificada com filtro por estado, prioridade, agente responsável e histórico por contato.
 - Entrada genérica por webhook, com reaproveitamento da conversa aberta do mesmo contato.
 - Respostas de operador salvas como `PENDING_APPROVAL`, com aprovação e rejeição explícitas.
-- Registro persistente do estado das mensagens (`RECEIVED`, `PENDING_APPROVAL`, `APPROVED`, `REJECTED`).
+- Registro persistente do estado das mensagens (`RECEIVED`, `PENDING_APPROVAL`, `APPROVED`, `REJECTED`, `SENT`, `SEND_ERROR`, `ERROR`).
+- Execução automática do agente atribuído a cada mensagem inbound, gerando rascunho `PENDING_APPROVAL` (falhas ficam registradas como mensagem `ERROR`).
+- Adaptador Telegram completo: webhook de entrada com validação de secret token, registro do webhook (`setWebhook`) pela página de integrações e worker que entrega mensagens `APPROVED` via `sendMessage`.
 
 ## Webhook genérico disponível
 
@@ -29,12 +31,12 @@ Também são aceitos `from` no lugar de `contactId` e `message` no lugar de `tex
 
 O núcleo não envia automaticamente mensagens aprovadas para provedores externos. Cada adaptador precisa transformar eventos e respostas no formato específico do provedor, validar assinaturas e atualizar o status de entrega.
 
-### Telegram
+### Telegram (implementado)
 
 1. Criar o bot no BotFather e obter o token.
-2. Expor o AgentHUB em uma URL HTTPS pública.
-3. Registrar o webhook no método `setWebhook` do Telegram.
-4. Implementar validação do secret token, conversão de `Update` para o webhook interno e envio por `sendMessage`.
+2. Criar a integração com provider Telegram e colar o token no campo de credencial secreta.
+3. Expor o AgentHUB em uma URL HTTPS pública (ex.: ngrok) e clicar em "webhook" no card da integração informando essa URL — o AgentHUB chama `setWebhook` com secret token derivado do bot token.
+4. Pronto: mensagens do bot entram no inbox, o agente gera rascunho e mensagens aprovadas são enviadas pelo worker (status `SENT`/`SEND_ERROR`). Somente mensagens de texto por enquanto.
 
 ### E-mail
 

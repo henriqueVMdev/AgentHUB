@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAgents } from '../stores/agentStore'
-import { createIntegration, deleteIntegration, listIntegrations, updateIntegration } from '../api/integrations'
+import { createIntegration, deleteIntegration, listIntegrations, registerTelegramWebhook, updateIntegration } from '../api/integrations'
 import type { Integration } from '../types'
 import { testIntegration } from '../api/inbox'
 
@@ -55,6 +55,13 @@ export default function Integrations() {
     await deleteIntegration(item.id); await load()
   }
   const test = async (item: Integration) => { if (!item.id) return; try { const result = await testIntegration(item.id); setTestResult(v => ({ ...v, [item.id!]: result.ok ? `conexão acessível${result.status ? ` (${result.status})` : ''}` : result.message || 'falha' })) } catch (e:any) { setTestResult(v => ({ ...v, [item.id!]: e.message })) } }
+  const registerWebhook = async (item: Integration) => {
+    if (!item.id) return
+    const url = window.prompt('URL pública HTTPS do AgentHUB (ex.: https://meu-tunel.ngrok.app):')
+    if (!url) return
+    try { const result = await registerTelegramWebhook(item.id, url.trim()); setTestResult(v => ({ ...v, [item.id!]: result.ok ? 'webhook registrado no Telegram' : result.description || result.message || 'falha ao registrar' })) }
+    catch (e: any) { setTestResult(v => ({ ...v, [item.id!]: e.message })) }
+  }
 
   return <div className="p-8 max-w-7xl mx-auto w-full">
     <div className="flex items-end gap-4 mb-7">
@@ -67,7 +74,7 @@ export default function Integrations() {
       {items.map(item => { const meta = providers.find(p => p.id === item.provider) ?? providers[providers.length - 1]; return <div className="panel p-5" key={item.id}>
         <div className="flex gap-3 items-start"><div className="w-11 h-11 rounded border border-term-green/30 bg-term-green/10 grid place-items-center text-term-green font-bold">{meta.icon}</div><div className="min-w-0 flex-1"><div className="font-semibold truncate">{item.name}</div><div className="text-xs text-term-muted">{meta.name}</div></div><span className={`badge ${item.enabled ? 'border-term-green/40 text-term-green' : 'border-term-border text-term-muted'}`}>{item.enabled ? 'ativa' : 'pausada'}</span></div>
         <div className="mt-4 pt-4 border-t border-term-border"><div className="text-[10px] text-term-muted uppercase tracking-widest mb-2">agentes vinculados</div><div className="flex flex-wrap gap-2">{item.agentIds.map(id => <span className="badge border-term-border" key={id}>{agents.find(a => a.id === id)?.name ?? `#${id}`}</span>)}</div></div>
-        {item.id && testResult[item.id] && <div className="text-xs text-term-muted mt-3">{testResult[item.id]}</div>}<div className="flex gap-2 mt-5"><button className="btn btn-ghost" onClick={() => test(item)}>testar</button><button className="btn btn-ghost flex-1" onClick={() => edit(item)}>configurar</button><button className="btn btn-danger" onClick={() => remove(item)}>excluir</button></div>
+        {item.id && testResult[item.id] && <div className="text-xs text-term-muted mt-3">{testResult[item.id]}</div>}<div className="flex gap-2 mt-5">{item.provider === 'telegram' ? <button className="btn btn-ghost" onClick={() => registerWebhook(item)}>webhook</button> : <button className="btn btn-ghost" onClick={() => test(item)}>testar</button>}<button className="btn btn-ghost flex-1" onClick={() => edit(item)}>configurar</button><button className="btn btn-danger" onClick={() => remove(item)}>excluir</button></div>
       </div> })}
       {!items.length && <div className="panel p-10 text-center text-term-muted sm:col-span-2 xl:col-span-3">Nenhuma integração configurada. Crie uma conexão e vincule seus agentes.</div>}
     </div>

@@ -31,6 +31,30 @@ public class InboxAgentService {
         executor.submit(() -> run(conversationId));
     }
 
+    /** Registra mensagem inbound, reaproveitando a conversa aberta do contato, e agenda o rascunho do agente. */
+    public InboxMessage ingest(IntegrationConfig integration, String contactId, String contactName, String text) {
+        var conversation = conversations
+                .findFirstByIntegrationIdAndExternalContactIdAndStatusNotOrderByUpdatedAtDesc(integration.getId(), contactId, "CLOSED")
+                .orElseGet(() -> {
+                    var created = new InboxConversation();
+                    created.setIntegrationId(integration.getId());
+                    created.setExternalContactId(contactId);
+                    created.setContactName(contactName);
+                    if (!integration.getAgentIds().isEmpty()) created.setAssignedAgentId(integration.getAgentIds().get(0));
+                    return conversations.save(created);
+                });
+        var message = new InboxMessage();
+        message.setConversationId(conversation.getId());
+        message.setDirection("INBOUND");
+        message.setSenderType("CONTACT");
+        message.setContent(text);
+        message = messages.save(message);
+        conversation.setSummary(text.length() > 120 ? text.substring(0, 120) : text);
+        conversations.save(conversation);
+        draftReply(conversation.getId());
+        return message;
+    }
+
     private void run(Long conversationId) {
         var conversation = conversations.findById(conversationId).orElse(null);
         if (conversation == null || conversation.getAssignedAgentId() == null) return;

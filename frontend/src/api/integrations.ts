@@ -5,3 +5,5 @@ export const listIntegrations = () => api.get<Integration[]>('/integrations').th
 export const createIntegration = (value: Integration) => api.post<Integration>('/integrations', value).then(r => r.data)
 export const updateIntegration = (id: number, value: Integration) => api.put<Integration>(`/integrations/${id}`, value).then(r => r.data)
 export const deleteIntegration = (id: number) => api.delete(`/integrations/${id}`)
+export const registerTelegramWebhook = (id: number, url: string) =>
+  api.post<{ ok: boolean; description?: string; message?: string }>(`/integrations/${id}/telegram/register`, { url }).then(r => r.data)

@@ -279,11 +279,30 @@ public class RunService {
         String systemPrompt = buildSystemPrompt(child);
         if (!systemPrompt.isBlank()) messages.add(msg("system", systemPrompt));
         messages.add(msg("user", task));
-        ArrayNode defs = buildToolDefs(child);
+        String result = chatLoop(child, messages, requestKey, depth, sourceRunId);
+        return result.isBlank() ? "Collaborator completed without a text response." : result;
+    }
+
+    /**
+     * Executa o agente de forma síncrona sobre um histórico simples (sem SSE, sem AgentRun).
+     * Usado pelo inbox para gerar rascunhos. Cada turn é {role, content}.
+     */
+    public String complete(Long agentId, List<String[]> turns) throws Exception {
+        AgentConfig agent = agents.findById(agentId).orElseThrow();
+        ArrayNode messages = mapper.createArrayNode();
+        String systemPrompt = buildSystemPrompt(agent);
+        if (!systemPrompt.isBlank()) messages.add(msg("system", systemPrompt));
+        for (String[] turn : turns) messages.add(msg(turn[0], turn[1]));
+        return chatLoop(agent, messages, null, 0, null);
+    }
+
+    /** Loop LLM + tools síncrono; retorna o último texto do assistant. */
+    private String chatLoop(AgentConfig agent, ArrayNode messages, String requestKey, int depth, Long sourceRunId) throws Exception {
+        ArrayNode defs = buildToolDefs(agent);
         String lastContent = "";
         for (int step = 0; step < 6; step++) {
-            JsonNode assistant = llm.chat(runtimeBaseUrl(child), runtimeApiKey(child, requestKey), child.getModelId(),
-                    child.getTemperature(), messages, defs);
+            JsonNode assistant = llm.chat(runtimeBaseUrl(agent), runtimeApiKey(agent, requestKey), agent.getModelId(),
+                    agent.getTemperature(), messages, defs);
             messages.add(assistant);
             if (!assistant.path("content").asText("").isBlank()) lastContent = assistant.path("content").asText();
             JsonNode calls = assistant.path("tool_calls");
@@ -294,11 +313,11 @@ public class RunService {
                 JsonNode fnArgs = safeParse(call.path("function").path("arguments").asText("{}"));
                 ObjectNode toolMsg = mapper.createObjectNode().put("role", "tool")
                         .put("tool_call_id", callId)
-                        .put("content", executeTool(child, fn, fnArgs, requestKey, depth, sourceRunId));
+                        .put("content", executeTool(agent, fn, fnArgs, requestKey, depth, sourceRunId));
                 messages.add(toolMsg);
             }
         }
-        return lastContent.isBlank() ? "Collaborator completed without a text response." : lastContent;
+        return lastContent;
     }
 
     private String limit(String value, int max) {

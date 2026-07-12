@@ -9,6 +9,8 @@ import ModelDetails from './pages/ModelDetails'
 import Settings from './pages/Settings'
 import Skills from './pages/Skills'
 import Chats from './pages/Chats'
+import Integrations from './pages/Integrations'
+import Inbox from './pages/Inbox'
 import { useTheme } from './stores/themeStore'
 import { applyVars, themes } from './themes'
 import CoolBackground from './components/coolBackground'
@@ -58,8 +60,10 @@ export default function App() {
         <NavItem to="/">dashboard</NavItem>
         <NavItem to="/agents/new">new_agent</NavItem>
         <NavItem to="/chats">chats</NavItem>
+        <NavItem to="/inbox">inbox</NavItem>
         <NavItem to="/models">models</NavItem>
         <NavItem to="/skills">skills</NavItem>
+        <NavItem to="/integrations">integrations</NavItem>
         <NavItem to="/settings">settings</NavItem>
         <div className="mt-auto px-3 text-[10px] text-term-muted/60 tracking-widest">v0.1.0</div>
       </aside>
@@ -68,12 +72,14 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/agents/new" element={<AgentBuilder />} />
           <Route path="/chats" element={<Chats />} />
+          <Route path="/inbox" element={<Inbox />} />
           <Route path="/agents/:id/edit" element={<AgentBuilder />} />
           <Route path="/agents/:id/run" element={<AgentRunner />} />
           <Route path="/agents/:id/runs" element={<RunHistory />} />
           <Route path="/models" element={<Models />} />
           <Route path="/models/:author/:slug" element={<ModelDetails />} />
           <Route path="/skills" element={<Skills />} />
+          <Route path="/integrations" element={<Integrations />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>

@@ -9,9 +9,14 @@ import type { Agent, AgentRun } from '../types'
 type Message = { id: string; role: 'user' | 'agent' | 'system'; text: string; agentName?: string }
 type Chat = { id: string; agentId: number; memberIds?: number[]; title: string; messages: Message[]; continuationRunId?: number; continuationRunIds?: Record<number, number>; sourceRunId?: number }
 const STORAGE_KEY = 'agents-pool-agent-chats-v2'
+const DELETED_RUNS_KEY = 'agents-pool-deleted-chat-runs-v1'
 
 function loadChats(): Chat[] {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') } catch { return [] }
+}
+
+function loadDeletedRunIds(): number[] {
+  try { return JSON.parse(localStorage.getItem(DELETED_RUNS_KEY) || '[]') } catch { return [] }
 }
 
 function execute(agentId: number, prompt: string, continuationRunId?: number, onText?: (text: string) => void) {
@@ -106,7 +111,8 @@ export default function Chats() {
     setAgentId(id)
     try {
       const runs = await listRuns(id)
-      const usableRuns = runs.filter(item => item.status === 'RUNNING' || (item.status === 'DONE' && item.messagesJson))
+      const deletedRunIds = new Set(loadDeletedRunIds())
+      const usableRuns = runs.filter(item => !deletedRunIds.has(item.id) && (item.status === 'RUNNING' || (item.status === 'DONE' && item.messagesJson)))
       const runById = new Map(usableRuns.map(run => [run.id, run]))
       // Runs são turnos técnicos, não conversas. Remove a importação antiga que criava um chat por turno.
       let nextChats = chats.filter(chat => chat.agentId !== id || !chat.sourceRunId)
@@ -144,6 +150,28 @@ export default function Chats() {
     if (!agentId) return
     const chat: Chat = { id: crypto.randomUUID(), agentId, title: `Conversa ${agentChats.length + 1}`, messages: [] }
     setChats(previous => [...previous, chat]); setChatId(chat.id); setPrompt('')
+  }
+
+  const deleteChat = () => {
+    if (!activeChat || chatBusy) return
+    if (!window.confirm(`Excluir o chat "${activeChat.title}"? Esta ação não pode ser desfeita.`)) return
+
+    const runIds = [
+      activeChat.sourceRunId,
+      activeChat.continuationRunId,
+      ...Object.values(activeChat.continuationRunIds || {}),
+    ].filter((id): id is number => id !== undefined)
+    if (runIds.length) {
+      const deletedRunIds = new Set([...loadDeletedRunIds(), ...runIds])
+      localStorage.setItem(DELETED_RUNS_KEY, JSON.stringify([...deletedRunIds]))
+    }
+
+    const remainingChats = chats.filter(chat => chat.id !== activeChat.id)
+    const nextChat = remainingChats.find(chat => chat.agentId === agentId || chat.memberIds?.includes(agentId!))
+    setChats(remainingChats)
+    setPrompt('')
+    if (nextChat) setChatId(nextChat.id)
+    else { setChatId(undefined); setAgentId(undefined) }
   }
 
   const createTeamChat = () => {
@@ -237,6 +265,7 @@ export default function Chats() {
       <div className="w-10 h-10 rounded-full border flex items-center justify-center font-bold" style={{ color: selectedAgent.color, borderColor: `${selectedAgent.color}66` }}>{selectedAgent.emoji || selectedAgent.name.slice(0, 2).toUpperCase()}</div>
       <div><h1 className="font-bold">{activeChat?.memberIds ? activeChat.title : selectedAgent.name}</h1><p className="text-[10px] text-term-muted uppercase tracking-widest">{activeChat?.memberIds ? activeChat.memberIds.map(id => agents.find(agent => agent.id === id)?.name).join(' · ') : 'chat com agente'}</p></div>
       <select className="field max-w-72 ml-auto" value={chatId} onChange={event => setChatId(event.target.value)}>{agentChats.map(chat => <option key={chat.id} value={chat.id}>{chat.title}</option>)}</select>
+      <button className="btn btn-ghost text-term-red" onClick={deleteChat} disabled={!activeChat || chatBusy} title={chatBusy ? 'Aguarde a rodada terminar' : 'Excluir chat'}>excluir</button>
       <button className="btn btn-primary" onClick={newChat}>+ novo chat</button>
     </header>
     <main className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">

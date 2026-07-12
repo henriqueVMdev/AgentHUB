@@ -58,6 +58,21 @@ export interface AgentRun {
   endedAt?: string
 }
 
+export interface Integration {
+  id?: number
+  name: string
+  provider: string
+  enabled: boolean
+  endpointUrl: string
+  account: string
+  secret?: string
+  agentIds: number[]
+  createdAt?: string
+  updatedAt?: string
+}
+export interface InboxConversation { id:number; integrationId:number; assignedAgentId?:number; externalContactId:string; contactName:string; status:'OPEN'|'WAITING'|'CLOSED'; priority:'LOW'|'NORMAL'|'HIGH'; summary?:string; updatedAt:string }
+export interface InboxMessage { id:number; conversationId:number; direction:'INBOUND'|'OUTBOUND'; senderType:string; agentId?:number; status:string; content:string; errorMessage?:string; createdAt:string }
+
 export type StreamEvent =
   | { type: 'assistant'; content: string }
   | { type: 'tool_call'; name: string; args: string }

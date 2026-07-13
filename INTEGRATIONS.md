@@ -7,7 +7,7 @@
 - Segredos aceitos somente na escrita e omitidos das respostas da API.
 - Teste de disponibilidade de endpoints HTTP/HTTPS pela página de integrações.
 - Caixa de entrada unificada com filtro por estado, prioridade, agente responsável e histórico por contato.
-- Entrada genérica por webhook, com reaproveitamento da conversa aberta do mesmo contato.
+- Entrada genérica por webhook, com reaproveitamento da conversa aberta do mesmo contato e validação obrigatória do secret da integração (`X-Webhook-Secret`).
 - Respostas de operador salvas como `PENDING_APPROVAL`, com aprovação e rejeição explícitas.
 - Registro persistente do estado das mensagens (`RECEIVED`, `PENDING_APPROVAL`, `APPROVED`, `REJECTED`, `SENT`, `SEND_ERROR`, `ERROR`).
 - Execução automática do agente atribuído a cada mensagem inbound, gerando rascunho `PENDING_APPROVAL` (falhas ficam registradas como mensagem `ERROR`).
@@ -15,7 +15,7 @@
 
 ## Webhook genérico disponível
 
-Envie `POST /api/inbox/webhook/{integrationId}` com JSON:
+Envie `POST /api/inbox/webhook/{integrationId}` com o header `X-Webhook-Secret` igual à credencial secreta da integração (obrigatório — sem secret configurado o endpoint responde 401) e JSON:
 
 ```json
 {
@@ -77,8 +77,8 @@ O núcleo não envia automaticamente mensagens aprovadas para provedores externo
 
 - Criptografar segredos em repouso com uma chave externa ao banco (KMS/Vault ou `INTEGRATION_ENCRYPTION_KEY`).
 - Adicionar autenticação e autorização à interface e API.
-- Validar assinatura de cada provedor e aplicar rate limiting aos webhooks.
-- Restringir o teste de endpoints para impedir SSRF contra redes locais/metadados de nuvem.
+- Aplicar rate limiting aos webhooks (a validação de secret por integração já existe; assinatura HMAC específica por provedor ainda não).
+- ~~Restringir o teste de endpoints para impedir SSRF contra redes locais/metadados de nuvem.~~ Feito: endereços loopback, RFC 1918, link-local e IPv6 ULA são bloqueados.
 - Criar política de retenção, exportação e exclusão de dados pessoais.
 - Implementar fila durável, idempotência, retentativas com backoff e dead-letter queue.
 

@@ -29,6 +29,12 @@ public class RunController {
         return emitter;
     }
 
+    @PostMapping("/{id}/stop")
+    public Map<String, Boolean> stop(@PathVariable Long id) {
+        service.stop(id);
+        return Map.of("ok", true);
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<AgentRun> get(@PathVariable Long id) {
         return runs.findById(id).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());

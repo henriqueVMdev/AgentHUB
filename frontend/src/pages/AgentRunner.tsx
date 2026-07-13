@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getAgent, listRuns } from '../api/agents'
-import { startRun, streamRun } from '../api/runs'
+import { startRun, stopRun, streamRun } from '../api/runs'
 import MessageStream, { type StreamItem } from '../components/MessageStream'
 import { TermInput } from '../components/ui'
 import type { Agent } from '../types'
@@ -94,6 +94,12 @@ export default function AgentRunner() {
     }
   }
 
+  const stop = async () => {
+    if (!continuationRunId) return
+    try { await stopRun(continuationRunId) } catch { /* run já terminou */ }
+    setItems((previous) => [...previous, { kind: 'text', text: '[cancelado] parando no próximo passo...' }])
+  }
+
   const newConversation = () => {
     if (running) return
     setItems([])
@@ -135,7 +141,9 @@ export default function AgentRunner() {
           placeholder={items.length ? 'responda ao agente e pressione enter' : 'descreva a tarefa e pressione enter'}
           className="flex-1"
         />
-        <button onClick={run} disabled={running} className="btn btn-primary px-6">{running ? '...' : 'run'}</button>
+        {running
+          ? <button onClick={stop} className="btn btn-danger px-6">stop</button>
+          : <button onClick={run} className="btn btn-primary px-6">run</button>}
       </div>
 
       <div className="win">

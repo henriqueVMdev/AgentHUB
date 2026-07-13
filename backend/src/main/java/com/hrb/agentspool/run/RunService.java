@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Orquestra a execução de um agente: monta as mensagens, chama o LLM em loop,
@@ -47,6 +48,8 @@ public class RunService {
 
     // runId -> request pendente (entre /start e /stream)
     private final ConcurrentHashMap<Long, StartRunRequest> pending = new ConcurrentHashMap<>();
+    // runId -> flag de cancelamento, checada a cada passo do loop e antes de cada tool
+    private final ConcurrentHashMap<Long, AtomicBoolean> cancelFlags = new ConcurrentHashMap<>();
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
     public RunService(AgentRepository agents, AgentRunRepository runs, LlmClient llm, ToolRegistry tools,
@@ -81,7 +84,30 @@ public class RunService {
             emitter.complete();
             return;
         }
+        cancelFlags.put(runId, new AtomicBoolean(false));
         executor.submit(() -> runLoop(runId, req, emitter));
+    }
+
+    /**
+     * Sinaliza o cancelamento do run. Se ainda não começou a streamar, cancela direto;
+     * se está em execução, o loop encerra no próximo checkpoint (passo ou tool call).
+     */
+    public void stop(Long runId) {
+        if (pending.remove(runId) != null) {
+            runs.findById(runId).ifPresent(run -> {
+                run.setStatus("CANCELLED");
+                run.setEndedAt(LocalDateTime.now());
+                runs.save(run);
+            });
+            return;
+        }
+        AtomicBoolean flag = cancelFlags.get(runId);
+        if (flag != null) flag.set(true); // run já finalizado é no-op
+    }
+
+    private boolean isCancelled(Long runId) {
+        AtomicBoolean flag = cancelFlags.get(runId);
+        return flag != null && flag.get();
     }
 
     private void runLoop(Long runId, StartRunRequest req, SseEmitter emitter) {
@@ -101,6 +127,7 @@ public class RunService {
             ArrayNode toolDefs = buildToolDefs(agent);
 
             for (int step = 0; step < MAX_STEPS; step++) {
+                if (isCancelled(runId)) { finish(run, messages, emitter, true); return; }
                 JsonNode assistant = llm.chat(runtimeBaseUrl(agent), runtimeApiKey(agent, req.apiKey), agent.getModelId(),
                         agent.getTemperature(), messages, toolDefs);
                 messages.add(assistant);
@@ -116,6 +143,7 @@ public class RunService {
                 }
 
                 for (JsonNode call : toolCalls) {
+                    if (isCancelled(runId)) { finish(run, messages, emitter, true); return; }
                     String callId = call.path("id").asText();
                     String fnName = call.path("function").path("name").asText();
                     String rawArgs = call.path("function").path("arguments").asText("{}");
@@ -137,19 +165,26 @@ public class RunService {
                 }
             }
 
-            run.setStatus("DONE");
-            run.setMessagesJson(mapper.writeValueAsString(messages));
-            run.setEndedAt(LocalDateTime.now());
-            runs.save(run);
-            send(emitter, "done", "{}");
-            emitter.complete();
+            finish(run, messages, emitter, false);
         } catch (Exception e) {
             run.setStatus("ERROR");
             run.setEndedAt(LocalDateTime.now());
             runs.save(run);
             send(emitter, "error", json("message", e.getMessage() == null ? e.toString() : e.getMessage()));
             emitter.complete();
+        } finally {
+            cancelFlags.remove(runId);
         }
+    }
+
+    /** Persiste o run (DONE ou CANCELLED), salva o histórico e fecha o SSE. */
+    private void finish(AgentRun run, ArrayNode messages, SseEmitter emitter, boolean cancelled) throws Exception {
+        run.setStatus(cancelled ? "CANCELLED" : "DONE");
+        run.setMessagesJson(mapper.writeValueAsString(messages));
+        run.setEndedAt(LocalDateTime.now());
+        runs.save(run);
+        send(emitter, "done", "{\"cancelled\":" + cancelled + "}");
+        emitter.complete();
     }
 
     private ObjectNode msg(String role, String content) {

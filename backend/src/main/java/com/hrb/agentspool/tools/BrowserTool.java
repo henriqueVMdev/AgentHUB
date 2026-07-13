@@ -17,6 +17,9 @@ public class BrowserTool implements ToolExecutor {
     private Playwright playwright;
     private Browser browser;
     private Page page;
+    private final EgressGuard guard;
+
+    public BrowserTool(EgressGuard guard) { this.guard = guard; }
 
     @Override public String group() { return "browser"; }
 
@@ -48,7 +51,10 @@ public class BrowserTool implements ToolExecutor {
         ensureBrowser();
         switch (fn) {
             case "browser_navigate" -> {
-                page.navigate(args.path("url").asText());
+                String url = args.path("url").asText();
+                String blocked = guard.check(url, null);
+                if (blocked != null) return "BLOQUEADO: " + blocked;
+                page.navigate(url);
                 return "Navegou para: " + page.title();
             }
             case "browser_get_text" -> {
@@ -70,6 +76,14 @@ public class BrowserTool implements ToolExecutor {
             browser = playwright.chromium().launch(
                     new com.microsoft.playwright.BrowserType.LaunchOptions().setHeadless(true));
             page = browser.newPage();
+            // bloqueia redirects e subrecursos apontando para a rede local — o check
+            // do navigate só cobre a URL inicial
+            page.route("**/*", route -> {
+                String host = null;
+                try { host = java.net.URI.create(route.request().url()).getHost(); } catch (Exception ignored) { }
+                if (host == null || guard.isPrivateHost(host)) route.abort();
+                else route.resume();
+            });
         }
     }
 }

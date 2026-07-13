@@ -14,6 +14,9 @@ import java.time.Duration;
 public class HttpTool implements ToolExecutor {
     private final HttpClient http = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(15)).build();
+    private final EgressGuard guard;
+
+    public HttpTool(EgressGuard guard) { this.guard = guard; }
 
     @Override public String group() { return "http"; }
 
@@ -37,6 +40,9 @@ public class HttpTool implements ToolExecutor {
         String method = args.path("method").asText("GET").toUpperCase();
         String url = args.path("url").asText();
         String body = args.path("body").asText("");
+
+        String blocked = guard.check(url, body);
+        if (blocked != null) return "BLOQUEADO: " + blocked;
 
         HttpRequest.BodyPublisher pub = body.isEmpty()
                 ? HttpRequest.BodyPublishers.noBody()

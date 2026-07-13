@@ -128,8 +128,10 @@ public class RunService {
 
             for (int step = 0; step < MAX_STEPS; step++) {
                 if (isCancelled(runId)) { finish(run, messages, emitter, true); return; }
-                JsonNode assistant = llm.chat(runtimeBaseUrl(agent), runtimeApiKey(agent, req.apiKey), agent.getModelId(),
+                JsonNode response = llm.chat(runtimeBaseUrl(agent), runtimeApiKey(agent, req.apiKey), agent.getModelId(),
                         agent.getTemperature(), messages, toolDefs);
+                addUsage(run, response.path("usage"));
+                JsonNode assistant = response.path("choices").path(0).path("message");
                 messages.add(assistant);
 
                 String content = assistant.path("content").asText("");
@@ -176,6 +178,19 @@ public class RunService {
             cancelFlags.remove(runId);
         }
     }
+
+    /** Acumula o usage de uma chamada LLM no run (persistido junto com o run no fim). */
+    private void addUsage(AgentRun run, JsonNode usage) {
+        if (usage.isMissingNode()) return;
+        run.setPromptTokens(nz(run.getPromptTokens()) + usage.path("prompt_tokens").asInt(0));
+        run.setCompletionTokens(nz(run.getCompletionTokens()) + usage.path("completion_tokens").asInt(0));
+        run.setTotalTokens(nz(run.getTotalTokens()) + usage.path("total_tokens").asInt(0));
+        if (usage.hasNonNull("cost")) {
+            run.setCostUsd((run.getCostUsd() == null ? 0 : run.getCostUsd()) + usage.path("cost").asDouble(0));
+        }
+    }
+
+    private int nz(Integer value) { return value == null ? 0 : value; }
 
     /** Persiste o run (DONE ou CANCELLED), salva o histórico e fecha o SSE. */
     private void finish(AgentRun run, ArrayNode messages, SseEmitter emitter, boolean cancelled) throws Exception {
@@ -337,7 +352,8 @@ public class RunService {
         String lastContent = "";
         for (int step = 0; step < 6; step++) {
             JsonNode assistant = llm.chat(runtimeBaseUrl(agent), runtimeApiKey(agent, requestKey), agent.getModelId(),
-                    agent.getTemperature(), messages, defs);
+                    agent.getTemperature(), messages, defs)
+                    .path("choices").path(0).path("message");
             messages.add(assistant);
             if (!assistant.path("content").asText("").isBlank()) lastContent = assistant.path("content").asText();
             JsonNode calls = assistant.path("tool_calls");

@@ -21,6 +21,12 @@ public class AgentRun {
     private LocalDateTime startedAt;
     private LocalDateTime endedAt;
 
+    // usage acumulado de todas as chamadas LLM do run; costUsd só quando o provider informa (OpenRouter)
+    private Integer promptTokens;
+    private Integer completionTokens;
+    private Integer totalTokens;
+    private Double costUsd;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public Long getAgentId() { return agentId; }
@@ -35,4 +41,12 @@ public class AgentRun {
     public void setStartedAt(LocalDateTime startedAt) { this.startedAt = startedAt; }
     public LocalDateTime getEndedAt() { return endedAt; }
     public void setEndedAt(LocalDateTime endedAt) { this.endedAt = endedAt; }
+    public Integer getPromptTokens() { return promptTokens; }
+    public void setPromptTokens(Integer promptTokens) { this.promptTokens = promptTokens; }
+    public Integer getCompletionTokens() { return completionTokens; }
+    public void setCompletionTokens(Integer completionTokens) { this.completionTokens = completionTokens; }
+    public Integer getTotalTokens() { return totalTokens; }
+    public void setTotalTokens(Integer totalTokens) { this.totalTokens = totalTokens; }
+    public Double getCostUsd() { return costUsd; }
+    public void setCostUsd(Double costUsd) { this.costUsd = costUsd; }
 }

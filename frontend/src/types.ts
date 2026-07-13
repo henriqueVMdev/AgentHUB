@@ -51,11 +51,15 @@ export interface SkillProposal {
 export interface AgentRun {
   id: number
   agentId: number
-  status: 'RUNNING' | 'DONE' | 'ERROR'
+  status: 'RUNNING' | 'DONE' | 'ERROR' | 'CANCELLED'
   inputPrompt: string
   messagesJson?: string
   startedAt: string
   endedAt?: string
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+  costUsd?: number
 }
 
 export interface Integration {

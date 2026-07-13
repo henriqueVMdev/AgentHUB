@@ -8,6 +8,7 @@ const STATUS: Record<string, string> = {
   DONE: 'border-term-green/40 text-term-green',
   ERROR: 'border-term-red/40 text-term-red',
   RUNNING: 'border-term-amber/40 text-term-amber animate-pulse',
+  CANCELLED: 'border-term-border text-term-muted',
 }
 
 export default function RunHistory() {
@@ -71,6 +72,9 @@ export default function RunHistory() {
             <div className="flex items-center gap-3">
               <span className={`badge ${STATUS[r.status] ?? 'border-term-border text-term-muted'}`}>{r.status}</span>
               <span className="text-xs text-term-muted">{new Date(r.startedAt).toLocaleString('pt-BR')}</span>
+              {r.totalTokens != null && <span className="text-[10px] text-term-muted/80" title={`${r.promptTokens ?? 0} in / ${r.completionTokens ?? 0} out`}>
+                {r.totalTokens.toLocaleString('pt-BR')} tok{r.costUsd != null ? ` · US$ ${r.costUsd.toFixed(4)}` : ''}
+              </span>}
               <span className="ml-auto text-[10px] text-term-muted/60">#{r.id} {expanded === r.id ? '▲' : '▼'}</span>
             </div>
             <p className="text-sm text-term-text mt-2">

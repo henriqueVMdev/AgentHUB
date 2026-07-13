@@ -29,7 +29,7 @@ public class LlmClient {
     /**
      * @param messages array JSON de messages (formato OpenAI)
      * @param tools    array JSON de tool definitions, ou null
-     * @return o objeto "message" da primeira choice
+     * @return a resposta completa (choices, usage, ...); o message fica em choices[0].message
      */
     public JsonNode chat(String baseUrl, String apiKey, String model, Double temperature,
                          ArrayNode messages, ArrayNode tools) throws Exception {
@@ -42,6 +42,9 @@ public class LlmClient {
         String url = (baseUrl == null || baseUrl.isBlank() ? OPENROUTER_URL : baseUrl.replaceAll("/+$", ""))
                 + "/chat/completions";
 
+        // ponytail: só o OpenRouter aceita este campo (devolve usage.cost); endpoints estritos rejeitam extras
+        if (url.contains("openrouter.ai")) body.set("usage", mapper.createObjectNode().put("include", true));
+
         HttpRequest.Builder req = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .timeout(Duration.ofMinutes(5))
@@ -53,7 +56,6 @@ public class LlmClient {
         if (resp.statusCode() >= 400) {
             throw new RuntimeException("LLM API error " + resp.statusCode() + ": " + resp.body());
         }
-        JsonNode json = mapper.readTree(resp.body());
-        return json.path("choices").path(0).path("message");
+        return mapper.readTree(resp.body());
     }
 }

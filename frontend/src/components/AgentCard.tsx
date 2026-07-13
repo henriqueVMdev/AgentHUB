@@ -3,7 +3,7 @@ import type { Agent } from '../types'
 
 interface Props {
   agent: Agent
-  runStatus?: 'RUNNING' | 'DONE' | 'ERROR'
+  runStatus?: 'RUNNING' | 'DONE' | 'ERROR' | 'CANCELLED' // CANCELLED cai no visual "idle"
   onRun: () => void
   onEdit: () => void
   onDelete: () => void

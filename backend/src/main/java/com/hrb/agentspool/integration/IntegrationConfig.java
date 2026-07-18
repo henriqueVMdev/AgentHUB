@@ -19,6 +19,7 @@ public class IntegrationConfig {
     @Column(columnDefinition = "TEXT") private String secret;
     @ElementCollection(fetch = FetchType.EAGER)
     private List<Long> agentIds = new ArrayList<>();
+    private Long operationId; // opcional: atendimentos rodam com briefing/skills/memórias da operação
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -40,6 +41,8 @@ public class IntegrationConfig {
     public void setSecret(String secret) { this.secret = secret; }
     public List<Long> getAgentIds() { return agentIds; }
     public void setAgentIds(List<Long> agentIds) { this.agentIds = agentIds == null ? new ArrayList<>() : agentIds; }
+    public Long getOperationId() { return operationId; }
+    public void setOperationId(Long operationId) { this.operationId = operationId; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
 }

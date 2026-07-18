@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAgents } from '../stores/agentStore'
 import { createIntegration, deleteIntegration, listIntegrations, registerTelegramWebhook, updateIntegration } from '../api/integrations'
-import type { Integration } from '../types'
+import { listOperations } from '../api/operations'
+import type { Integration, Operation } from '../types'
 import { testIntegration } from '../api/inbox'
 
 const providers = [
@@ -17,12 +18,13 @@ const providers = [
 
 const empty = (provider = providers[0]): Integration => ({
   name: provider.name, provider: provider.id, enabled: true, endpointUrl: provider.endpoint,
-  account: '', secret: '', agentIds: [],
+  account: '', secret: '', agentIds: [], operationId: null,
 })
 
 export default function Integrations() {
   const { agents, fetch: fetchAgents } = useAgents()
   const [items, setItems] = useState<Integration[]>([])
+  const [operations, setOperations] = useState<Operation[]>([])
   const [form, setForm] = useState<Integration>(() => empty())
   const [editingId, setEditingId] = useState<number>()
   const [open, setOpen] = useState(false)
@@ -31,7 +33,10 @@ export default function Integrations() {
   const [testResult, setTestResult] = useState<Record<number, string>>({})
 
   const load = async () => { try { setItems(await listIntegrations()); setError('') } catch (e: any) { setError(e.message) } }
-  useEffect(() => { fetchAgents(); load() }, [fetchAgents])
+  useEffect(() => {
+    fetchAgents(); load()
+    listOperations().then((all) => setOperations(all.filter((operation) => operation.status === 'ACTIVE')))
+  }, [fetchAgents])
   const provider = useMemo(() => providers.find(p => p.id === form.provider) ?? providers[0], [form.provider])
 
   const chooseProvider = (id: string) => {
@@ -73,7 +78,7 @@ export default function Integrations() {
     <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
       {items.map(item => { const meta = providers.find(p => p.id === item.provider) ?? providers[providers.length - 1]; return <div className="panel p-5" key={item.id}>
         <div className="flex gap-3 items-start"><div className="w-11 h-11 rounded border border-term-green/30 bg-term-green/10 grid place-items-center text-term-green font-bold">{meta.icon}</div><div className="min-w-0 flex-1"><div className="font-semibold truncate">{item.name}</div><div className="text-xs text-term-muted">{meta.name}</div></div><span className={`badge ${item.enabled ? 'border-term-green/40 text-term-green' : 'border-term-border text-term-muted'}`}>{item.enabled ? 'ativa' : 'pausada'}</span></div>
-        <div className="mt-4 pt-4 border-t border-term-border"><div className="text-[10px] text-term-muted uppercase tracking-widest mb-2">agentes vinculados</div><div className="flex flex-wrap gap-2">{item.agentIds.map(id => <span className="badge border-term-border" key={id}>{agents.find(a => a.id === id)?.name ?? `#${id}`}</span>)}</div></div>
+        <div className="mt-4 pt-4 border-t border-term-border"><div className="text-[10px] text-term-muted uppercase tracking-widest mb-2">agentes vinculados</div><div className="flex flex-wrap gap-2">{item.agentIds.map(id => <span className="badge border-term-border" key={id}>{agents.find(a => a.id === id)?.name ?? `#${id}`}</span>)}{item.operationId && <span className="badge border-term-amber/50 text-term-amber">{operations.find(o => o.id === item.operationId)?.name ?? `op #${item.operationId}`}</span>}</div></div>
         {item.id && testResult[item.id] && <div className="text-xs text-term-muted mt-3">{testResult[item.id]}</div>}<div className="flex gap-2 mt-5">{item.provider === 'telegram' ? <button className="btn btn-ghost" onClick={() => registerWebhook(item)}>webhook</button> : <button className="btn btn-ghost" onClick={() => test(item)}>testar</button>}<button className="btn btn-ghost flex-1" onClick={() => edit(item)}>configurar</button><button className="btn btn-danger" onClick={() => remove(item)}>excluir</button></div>
       </div> })}
       {!items.length && <div className="panel p-10 text-center text-term-muted sm:col-span-2 xl:col-span-3">Nenhuma integração configurada. Crie uma conexão e vincule seus agentes.</div>}
@@ -87,6 +92,11 @@ export default function Integrations() {
         <div><label className="label">conta / canal / identificador</label><input className="field" value={form.account} onChange={e => setForm({ ...form, account: e.target.value })} placeholder="@bot, e-mail, canal ou phone ID" /></div>
         <div className="sm:col-span-2"><label className="label">endpoint</label><input className="field" value={form.endpointUrl} onChange={e => setForm({ ...form, endpointUrl: e.target.value })} placeholder={provider.endpoint || 'URL da API ou webhook'} /></div>
         <div className="sm:col-span-2"><label className="label">credencial secreta</label><input type="password" className="field" value={form.secret || ''} onChange={e => setForm({ ...form, secret: e.target.value })} placeholder={editingId ? 'Deixe vazio para manter a atual' : provider.hint} /></div>
+        <div className="sm:col-span-2"><label className="label">operação (opcional — o atendimento roda com briefing, skills e memórias)</label>
+          <select className="field w-full" value={form.operationId ?? ''} onChange={e => setForm({ ...form, operationId: e.target.value ? Number(e.target.value) : null })}>
+            <option value="">nenhuma</option>
+            {operations.map(operation => <option key={operation.id} value={operation.id}>{operation.emoji} {operation.name}</option>)}
+          </select></div>
       </div>
       <div className="mt-5"><label className="label">agentes vinculados</label><div className="grid sm:grid-cols-2 gap-2">{agents.map(agent => <button key={agent.id} onClick={() => toggleAgent(agent.id!)} className={`p-3 rounded border flex items-center gap-3 text-left ${form.agentIds.includes(agent.id!) ? 'border-term-green/50 bg-term-green/10' : 'border-term-border'}`}><span className="w-8 h-8 rounded-full border grid place-items-center" style={{ color: agent.color, borderColor: `${agent.color}66` }}>{agent.emoji || agent.name.slice(0, 2)}</span><span className="text-sm flex-1">{agent.name}</span><span className={form.agentIds.includes(agent.id!) ? 'text-term-green' : 'text-term-muted'}>{form.agentIds.includes(agent.id!) ? '✓' : '+'}</span></button>)}</div></div>
       <label className="mt-5 flex items-center gap-3 text-sm"><input type="checkbox" checked={form.enabled} onChange={e => setForm({ ...form, enabled: e.target.checked })} /> conexão ativa</label>

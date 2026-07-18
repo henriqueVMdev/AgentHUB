@@ -183,7 +183,7 @@ public class RunService {
                     send(emitter, "tool_call", mapper.createObjectNode()
                             .put("name", fnName).put("args", rawArgs).toString());
 
-                    String result = executeTool(agent, operation, fnName, args, req.apiKey, 0, runId);
+                    String result = executeTool(agent, operation, fnName, args, req.apiKey, 0, runId, false);
 
                     send(emitter, "tool_result", mapper.createObjectNode()
                             .put("name", fnName).put("result", result).toString());
@@ -362,7 +362,7 @@ public class RunService {
     }
 
     private String executeTool(AgentConfig agent, Operation operation, String name, JsonNode args, String requestKey,
-                               int depth, Long sourceRunId) throws Exception {
+                               int depth, Long sourceRunId, boolean externalSource) throws Exception {
         if ("delegate_agent".equals(name)) {
             if (depth >= 2) return "Delegation depth limit reached.";
             long childId = args.path("agent_id").asLong(-1);
@@ -371,7 +371,7 @@ public class RunService {
             }
             AgentConfig child = agents.findById(childId).orElseThrow();
             // o colaborador herda o contexto da operação: subtarefa do mesmo trabalho
-            return executeChild(child, operation, args.path("task").asText(), requestKey, depth + 1, sourceRunId);
+            return executeChild(child, operation, args.path("task").asText(), requestKey, depth + 1, sourceRunId, externalSource);
         }
         if ("save_memory".equals(name)) {
             if (operation == null) return "This run is not attached to an operation.";
@@ -387,10 +387,11 @@ public class RunService {
             memory.setCategory(category);
             memory.setCreatedByAgentId(agent.getId());
             memory.setCreatedByRunId(sourceRunId);
-            // agente com acesso à web pode ter processado conteúdo externo malicioso;
-            // a memória só entra no contexto compartilhado depois de aprovação humana
-            boolean exposed = agent.getEnabledTools() != null
-                    && (agent.getEnabledTools().contains("http") || agent.getEnabledTools().contains("browser"));
+            // agente que processou conteúdo externo (web tools ou conversa vinda do inbox)
+            // pode ter sido manipulado; a memória só entra no contexto compartilhado
+            // depois de aprovação humana
+            boolean exposed = externalSource || (agent.getEnabledTools() != null
+                    && (agent.getEnabledTools().contains("http") || agent.getEnabledTools().contains("browser")));
             memory.setStatus(exposed ? "PENDING" : "ACTIVE");
             memory = operationMemories.save(memory);
             if (exposed) {
@@ -425,12 +426,12 @@ public class RunService {
     }
 
     private String executeChild(AgentConfig child, Operation operation, String task, String requestKey,
-                                int depth, Long sourceRunId) throws Exception {
+                                int depth, Long sourceRunId, boolean externalSource) throws Exception {
         ArrayNode messages = mapper.createArrayNode();
         String systemPrompt = buildSystemPrompt(child, operation, task);
         if (!systemPrompt.isBlank()) messages.add(msg("system", systemPrompt));
         messages.add(msg("user", task));
-        String result = chatLoop(child, operation, messages, requestKey, depth, sourceRunId);
+        String result = chatLoop(child, operation, messages, requestKey, depth, sourceRunId, externalSource);
         return result.isBlank() ? "Collaborator completed without a text response." : result;
     }
 
@@ -438,18 +439,23 @@ public class RunService {
      * Executa o agente de forma síncrona sobre um histórico simples (sem SSE, sem AgentRun).
      * Usado pelo inbox para gerar rascunhos. Cada turn é {role, content}.
      */
-    public String complete(Long agentId, List<String[]> turns) throws Exception {
+    public String complete(Long agentId, Long operationId, boolean externalContent, List<String[]> turns) throws Exception {
         AgentConfig agent = agents.findById(agentId).orElseThrow();
+        Operation operation = operationId == null ? null
+                : operations.findById(operationId).filter(op -> "ACTIVE".equals(op.getStatus())).orElse(null);
+        // a última mensagem do usuário guia o retrieval das memórias da operação
+        String query = turns.stream().filter(turn -> "user".equals(turn[0]))
+                .reduce((first, second) -> second).map(turn -> turn[1]).orElse(null);
         ArrayNode messages = mapper.createArrayNode();
-        String systemPrompt = buildSystemPrompt(agent, null, null);
+        String systemPrompt = buildSystemPrompt(agent, operation, query);
         if (!systemPrompt.isBlank()) messages.add(msg("system", systemPrompt));
         for (String[] turn : turns) messages.add(msg(turn[0], turn[1]));
-        return chatLoop(agent, null, messages, null, 0, null);
+        return chatLoop(agent, operation, messages, null, 0, null, externalContent);
     }
 
     /** Loop LLM + tools síncrono; retorna o último texto do assistant. */
     private String chatLoop(AgentConfig agent, Operation operation, ArrayNode messages, String requestKey,
-                            int depth, Long sourceRunId) throws Exception {
+                            int depth, Long sourceRunId, boolean externalSource) throws Exception {
         ArrayNode defs = buildToolDefs(agent, operation);
         String lastContent = "";
         for (int step = 0; step < 6; step++) {
@@ -466,7 +472,7 @@ public class RunService {
                 JsonNode fnArgs = safeParse(call.path("function").path("arguments").asText("{}"));
                 ObjectNode toolMsg = mapper.createObjectNode().put("role", "tool")
                         .put("tool_call_id", callId)
-                        .put("content", executeTool(agent, operation, fn, fnArgs, requestKey, depth, sourceRunId));
+                        .put("content", executeTool(agent, operation, fn, fnArgs, requestKey, depth, sourceRunId, externalSource));
                 messages.add(toolMsg);
             }
         }

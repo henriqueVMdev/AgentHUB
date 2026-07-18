@@ -137,6 +137,7 @@ export interface Integration {
   account: string
   secret?: string
   agentIds: number[]
+  operationId?: number | null
   createdAt?: string
   updatedAt?: string
 }

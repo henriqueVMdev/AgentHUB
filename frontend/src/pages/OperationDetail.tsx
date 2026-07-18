@@ -3,12 +3,16 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { listAgents } from '../api/agents'
 import {
   applyOperationConsolidation, approveOperationMemory, consolidateOperationMemories, createOperationMemory,
-  deleteOperation, deleteOperationMemory, getOperation, listOperationMemories, listOperationRuns,
-  updateOperation, updateOperationMemory,
+  deleteOperation, deleteOperationMemory, getOperation, getOperationStats, listOperationMemories,
+  listOperationRuns, updateOperation, updateOperationMemory,
 } from '../api/operations'
 import { listSkills } from '../api/skills'
 import { TermInput, Win } from '../components/ui'
-import type { Agent, AgentRun, AgentSkill, ConsolidationPreview, MemoryCategory, Operation, OperationMemory } from '../types'
+import type {
+  Agent, AgentRun, AgentSkill, ConsolidationPreview, MemoryCategory, Operation, OperationMemory, OperationStatsSummary,
+} from '../types'
+
+const formatCost = (value: number) => `$${value.toFixed(value >= 1 ? 2 : 4)}`
 
 const categories: MemoryCategory[] = ['FACT', 'DECISION', 'LEARNING']
 
@@ -22,6 +26,7 @@ export default function OperationDetail() {
   const [skills, setSkills] = useState<AgentSkill[]>([])
   const [memories, setMemories] = useState<OperationMemory[]>([])
   const [runs, setRuns] = useState<AgentRun[]>([])
+  const [stats, setStats] = useState<OperationStatsSummary | null>(null)
   const [saved, setSaved] = useState(false)
   const [memoryDraft, setMemoryDraft] = useState({ content: '', category: 'FACT' as MemoryCategory })
   const [consolidating, setConsolidating] = useState(false)
@@ -31,13 +36,14 @@ export default function OperationDetail() {
   useEffect(() => {
     Promise.all([
       getOperation(operationId), listAgents(), listSkills(),
-      listOperationMemories(operationId), listOperationRuns(operationId),
-    ]).then(([loadedOperation, loadedAgents, loadedSkills, loadedMemories, loadedRuns]) => {
+      listOperationMemories(operationId), listOperationRuns(operationId), getOperationStats(operationId),
+    ]).then(([loadedOperation, loadedAgents, loadedSkills, loadedMemories, loadedRuns, loadedStats]) => {
       setOperation(loadedOperation)
       setAgents(loadedAgents)
       setSkills(loadedSkills)
       setMemories(loadedMemories)
       setRuns(loadedRuns)
+      setStats(loadedStats)
     })
   }, [operationId])
 
@@ -137,6 +143,33 @@ export default function OperationDetail() {
           <button className="btn btn-danger" onClick={remove}>excluir</button>
         </div>
       </div>
+
+      {stats && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="panel p-3">
+            <div className="text-[10px] text-term-muted tracking-widest uppercase">runs</div>
+            <div className="text-lg font-bold mt-0.5">{stats.total.runs}</div>
+            <div className="text-[10px] text-term-muted">{stats.month.runs} este mês</div>
+          </div>
+          <div className="panel p-3">
+            <div className="text-[10px] text-term-muted tracking-widest uppercase">custo total</div>
+            <div className="text-lg font-bold mt-0.5 text-term-green">{formatCost(stats.total.costUsd)}</div>
+            <div className="text-[10px] text-term-muted">{formatCost(stats.month.costUsd)} este mês</div>
+          </div>
+          <div className="panel p-3">
+            <div className="text-[10px] text-term-muted tracking-widest uppercase">média por run</div>
+            <div className="text-lg font-bold mt-0.5">
+              {stats.total.runs > 0 ? formatCost(stats.total.costUsd / stats.total.runs) : '—'}
+            </div>
+            <div className="text-[10px] text-term-muted">custo informado pelo provider</div>
+          </div>
+          <div className="panel p-3">
+            <div className="text-[10px] text-term-muted tracking-widest uppercase">tokens</div>
+            <div className="text-lg font-bold mt-0.5">{stats.total.tokens.toLocaleString()}</div>
+            <div className="text-[10px] text-term-muted">{stats.month.tokens.toLocaleString()} este mês</div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <Win title="briefing" bodyClass="p-4 space-y-3">

@@ -1,5 +1,7 @@
 import { api } from './client'
-import type { AgentRun, ConsolidationPreview, MemoryDraft, Operation, OperationMemory } from '../types'
+import type {
+  AgentRun, ConsolidationPreview, MemoryDraft, Operation, OperationMemory, OperationStats, OperationStatsSummary,
+} from '../types'
 
 export const listOperations = () => api.get<Operation[]>('/operations').then((r) => r.data)
 export const getOperation = (id: number) => api.get<Operation>(`/operations/${id}`).then((r) => r.data)
@@ -28,3 +30,7 @@ export const applyOperationConsolidation = (operationId: number, drafts: MemoryD
 
 export const listOperationRuns = (operationId: number) =>
   api.get<AgentRun[]>(`/operations/${operationId}/runs`).then((r) => r.data)
+export const getOperationStats = (operationId: number) =>
+  api.get<OperationStatsSummary>(`/operations/${operationId}/stats`).then((r) => r.data)
+export const listOperationStats = () =>
+  api.get<Record<number, OperationStats>>('/operations/stats').then((r) => r.data)

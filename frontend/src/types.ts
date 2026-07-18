@@ -87,6 +87,17 @@ export interface ConsolidationPreview {
   after: MemoryDraft[]
 }
 
+export interface OperationStats {
+  runs: number
+  tokens: number
+  costUsd: number
+}
+
+export interface OperationStatsSummary {
+  total: OperationStats
+  month: OperationStats
+}
+
 export interface ScheduledRun {
   id?: number
   name: string

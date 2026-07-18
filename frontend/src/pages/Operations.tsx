@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { createOperation, listOperations } from '../api/operations'
+import { createOperation, listOperations, listOperationStats } from '../api/operations'
 import { TermInput, Win } from '../components/ui'
-import type { Operation } from '../types'
+import type { Operation, OperationStats } from '../types'
 
 const emptyDraft = { name: '', description: '' }
 
 export default function Operations() {
   const [operations, setOperations] = useState<Operation[]>([])
+  const [stats, setStats] = useState<Record<number, OperationStats>>({})
   const [loading, setLoading] = useState(true)
   const [draft, setDraft] = useState(emptyDraft)
 
   const refresh = async () => {
-    setOperations(await listOperations())
+    const [loadedOperations, loadedStats] = await Promise.all([listOperations(), listOperationStats()])
+    setOperations(loadedOperations)
+    setStats(loadedStats)
     setLoading(false)
   }
   useEffect(() => { refresh() }, [])
@@ -73,8 +76,13 @@ export default function Operations() {
                 <div className="text-xs text-term-muted truncate">{operation.description || 'sem descrição'}</div>
               </div>
               <div className="ml-auto text-[10px] text-term-muted text-right shrink-0">
-                <div>{operation.memberAgentIds.length} agentes</div>
-                <div>{operation.skillIds.length} skills</div>
+                <div>{operation.memberAgentIds.length} agentes · {operation.skillIds.length} skills</div>
+                <div>
+                  {stats[operation.id!]?.runs ?? 0} runs
+                  {stats[operation.id!] && stats[operation.id!].costUsd > 0 && (
+                    <span className="text-term-green"> · ${stats[operation.id!].costUsd.toFixed(stats[operation.id!].costUsd >= 1 ? 2 : 4)}</span>
+                  )}
+                </div>
               </div>
             </div>
           </Link>

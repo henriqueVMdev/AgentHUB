@@ -5,7 +5,10 @@ import com.hrb.agentspool.run.AgentRunRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/operations")
@@ -136,6 +139,34 @@ public class OperationController {
     @GetMapping("/{id}/runs")
     public List<AgentRun> listRuns(@PathVariable Long id) {
         return runs.findTop50ByOperationIdOrderByStartedAtDesc(id);
+    }
+
+    public record OperationStats(long runs, long tokens, double costUsd) {}
+    public record OperationStatsSummary(OperationStats total, OperationStats month) {}
+
+    @GetMapping("/{id}/stats")
+    public OperationStatsSummary stats(@PathVariable Long id) {
+        LocalDateTime monthStart = LocalDateTime.now().withDayOfMonth(1).toLocalDate().atStartOfDay();
+        return new OperationStatsSummary(
+                toStats(runs.aggregateByOperation(id, LocalDateTime.of(2000, 1, 1, 0, 0)).get(0)),
+                toStats(runs.aggregateByOperation(id, monthStart).get(0)));
+    }
+
+    /** Agregados de todas as operações num único group-by, para a lista. */
+    @GetMapping("/stats")
+    public Map<Long, OperationStats> statsAll() {
+        Map<Long, OperationStats> result = new HashMap<>();
+        for (Object[] row : runs.aggregateAllOperations()) {
+            result.put(((Number) row[0]).longValue(),
+                    new OperationStats(((Number) row[1]).longValue(), ((Number) row[2]).longValue(),
+                            ((Number) row[3]).doubleValue()));
+        }
+        return result;
+    }
+
+    private OperationStats toStats(Object[] row) {
+        return new OperationStats(((Number) row[0]).longValue(), ((Number) row[1]).longValue(),
+                ((Number) row[2]).doubleValue());
     }
 
     private boolean invalidContent(String content) {

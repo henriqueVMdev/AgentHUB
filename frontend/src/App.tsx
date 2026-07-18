@@ -10,6 +10,7 @@ import Settings from './pages/Settings'
 import Skills from './pages/Skills'
 import Operations from './pages/Operations'
 import OperationDetail from './pages/OperationDetail'
+import Routines from './pages/Routines'
 import Chats from './pages/Chats'
 import Integrations from './pages/Integrations'
 import Inbox from './pages/Inbox'
@@ -64,6 +65,7 @@ export default function App() {
         <NavItem to="/chats">chats</NavItem>
         <NavItem to="/inbox">inbox</NavItem>
         <NavItem to="/operations">operations</NavItem>
+        <NavItem to="/routines">routines</NavItem>
         <NavItem to="/models">models</NavItem>
         <NavItem to="/skills">skills</NavItem>
         <NavItem to="/integrations">integrations</NavItem>
@@ -83,6 +85,7 @@ export default function App() {
           <Route path="/models/:author/:slug" element={<ModelDetails />} />
           <Route path="/operations" element={<Operations />} />
           <Route path="/operations/:id" element={<OperationDetail />} />
+          <Route path="/routines" element={<Routines />} />
           <Route path="/skills" element={<Skills />} />
           <Route path="/integrations" element={<Integrations />} />
           <Route path="/settings" element={<Settings />} />

@@ -87,6 +87,21 @@ export interface ConsolidationPreview {
   after: MemoryDraft[]
 }
 
+export interface ScheduledRun {
+  id?: number
+  name: string
+  agentId: number | null
+  operationId?: number | null
+  prompt: string
+  cronExpression: string
+  enabled: boolean
+  lastRunAt?: string
+  lastRunId?: number
+  nextRunAt?: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
 export interface AgentRun {
   id: number
   agentId: number

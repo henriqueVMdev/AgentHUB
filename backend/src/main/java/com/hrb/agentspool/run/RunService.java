@@ -91,6 +91,17 @@ public class RunService {
         return run.getId();
     }
 
+    /**
+     * Inicia e executa um run sem cliente SSE conectado (rotinas agendadas).
+     * O emitter descartável apenas absorve os eventos; o resultado fica no
+     * AgentRun (messagesJson, status, tokens/custo), consultável no histórico.
+     */
+    public Long startDetached(StartRunRequest req) {
+        Long runId = start(req);
+        stream(runId, new SseEmitter(0L));
+        return runId;
+    }
+
     /** Executa o agente de forma assíncrona, emitindo eventos SSE. */
     public void stream(Long runId, SseEmitter emitter) {
         StartRunRequest req = pending.remove(runId);

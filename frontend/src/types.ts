@@ -48,9 +48,38 @@ export interface SkillProposal {
   reviewedAt?: string
 }
 
+export interface Operation {
+  id?: number
+  name: string
+  description: string
+  briefing: string
+  status: 'ACTIVE' | 'ARCHIVED'
+  emoji: string
+  color: string
+  memberAgentIds: number[]
+  skillIds: number[]
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type MemoryCategory = 'FACT' | 'DECISION' | 'LEARNING'
+
+export interface OperationMemory {
+  id: number
+  operationId: number
+  content: string
+  category: MemoryCategory
+  pinned: boolean
+  createdByAgentId?: number
+  createdByRunId?: number
+  createdAt: string
+  updatedAt: string
+}
+
 export interface AgentRun {
   id: number
   agentId: number
+  operationId?: number
   status: 'RUNNING' | 'DONE' | 'ERROR' | 'CANCELLED'
   inputPrompt: string
   messagesJson?: string

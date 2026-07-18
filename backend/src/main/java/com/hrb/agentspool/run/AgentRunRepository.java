@@ -7,6 +7,7 @@ import java.util.List;
 
 public interface AgentRunRepository extends JpaRepository<AgentRun, Long> {
     List<AgentRun> findTop50ByAgentIdOrderByStartedAtDesc(Long agentId);
+    List<AgentRun> findTop50ByOperationIdOrderByStartedAtDesc(Long operationId);
 
     @Transactional
     void deleteByAgentId(Long agentId);

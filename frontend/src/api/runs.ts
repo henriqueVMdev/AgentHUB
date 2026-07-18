@@ -1,8 +1,8 @@
 import { api } from './client'
 import type { StreamEvent } from '../types'
 
-export const startRun = (agentId: number, prompt: string, continuationRunId?: number) =>
-  api.post<{ runId: number }>('/runs/start', { agentId, prompt, continuationRunId }).then(r => r.data.runId)
+export const startRun = (agentId: number, prompt: string, continuationRunId?: number, operationId?: number) =>
+  api.post<{ runId: number }>('/runs/start', { agentId, prompt, continuationRunId, operationId }).then(r => r.data.runId)
 
 export const stopRun = (runId: number) => api.post(`/runs/${runId}/stop`)
 

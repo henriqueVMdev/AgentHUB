@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getAgent, listRuns } from '../api/agents'
+import { listOperations } from '../api/operations'
 import { startRun, stopRun, streamRun } from '../api/runs'
 import MessageStream, { type StreamItem } from '../components/MessageStream'
 import { TermInput } from '../components/ui'
-import type { Agent } from '../types'
+import type { Agent, Operation } from '../types'
 
 export default function AgentRunner() {
   const { id } = useParams()
@@ -14,10 +15,14 @@ export default function AgentRunner() {
   const [items, setItems] = useState<StreamItem[]>([])
   const [running, setRunning] = useState(false)
   const [continuationRunId, setContinuationRunId] = useState<number | undefined>()
+  const [operations, setOperations] = useState<Operation[]>([])
+  const [operationId, setOperationId] = useState<number | undefined>()
 
   useEffect(() => {
-    Promise.all([getAgent(Number(id)), listRuns(Number(id))]).then(([loadedAgent, runs]) => {
+    Promise.all([getAgent(Number(id)), listRuns(Number(id)), listOperations()]).then(([loadedAgent, runs, allOperations]) => {
       setAgent(loadedAgent)
+      setOperations(allOperations.filter((operation) =>
+        operation.status === 'ACTIVE' && operation.memberAgentIds.includes(Number(id))))
       const latest = runs.find((candidate) => candidate.status === 'DONE' && candidate.messagesJson)
       if (latest) {
         setContinuationRunId(latest.id)
@@ -61,7 +66,7 @@ export default function AgentRunner() {
     const sentPrompt = prompt.trim()
     setItems((previous) => [...previous, { kind: 'user', text: sentPrompt }]); setRunning(true); setPrompt('')
     try {
-      const runId = await startRun(Number(id), sentPrompt, continuationRunId)
+      const runId = await startRun(Number(id), sentPrompt, continuationRunId, operationId)
       setContinuationRunId(runId)
       streamRun(runId, (e) => {
         setItems((prev) => {
@@ -128,7 +133,28 @@ export default function AgentRunner() {
             {agent.modelId} · {running ? <span className="text-term-amber">executing</span> : <span className="text-term-dim">ready</span>}
           </div>
         </div>
-        <button onClick={newConversation} disabled={running} className="btn btn-ghost ml-auto">+ nova conversa</button>
+        <div className="ml-auto flex items-center gap-2">
+          {operations.length > 0 && (
+            <select
+              className="field text-xs w-44"
+              value={operationId ?? ''}
+              disabled={running}
+              title="operação: injeta briefing, skills e memórias no run (aplica na próxima conversa)"
+              onChange={(e) => {
+                setOperationId(e.target.value ? Number(e.target.value) : undefined)
+                // trocar de operação muda o system prompt — só vale numa conversa nova
+                setItems([])
+                setContinuationRunId(undefined)
+              }}
+            >
+              <option value="">sem operação</option>
+              {operations.map((operation) => (
+                <option key={operation.id} value={operation.id}>{operation.emoji} {operation.name}</option>
+              ))}
+            </select>
+          )}
+          <button onClick={newConversation} disabled={running} className="btn btn-ghost">+ nova conversa</button>
+        </div>
       </div>
 
       <div className="flex gap-2 mb-6">

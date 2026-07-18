@@ -2,7 +2,7 @@ import ToolCallCard, { type ToolCall } from './ToolCallCard'
 import ThinkingAnimation from './ThinkingAnimation'
 
 export type StreamItem =
-  | { kind: 'text'; text: string }
+  | { kind: 'text'; text: string; streaming?: boolean }
   | { kind: 'user'; text: string }
   | { kind: 'tool'; call: ToolCall }
 
@@ -14,6 +14,7 @@ export default function MessageStream({ items, running }: { items: StreamItem[];
           <div key={i} className="animate-fadeIn border-l-2 border-term-green/40 pl-3 py-0.5">
             <span className="text-term-green/60 select-none">agent:~$ </span>
             <span className="whitespace-pre-wrap leading-relaxed text-term-text">{it.text}</span>
+            {it.streaming && <span className="text-term-green animate-blink">▋</span>}
           </div>
         ) : it.kind === 'user' ? (
           <div key={i} className="animate-fadeIn flex justify-end">

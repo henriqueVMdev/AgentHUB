@@ -71,10 +71,29 @@ export default function AgentRunner() {
       streamRun(runId, (e) => {
         setItems((prev) => {
           const next = [...prev]
+          const last = next[next.length - 1]
           switch (e.type) {
+            case 'assistant_delta':
+              // acumula tokens no item em streaming; cria um novo se o anterior já fechou
+              if (last?.kind === 'text' && last.streaming) {
+                next[next.length - 1] = { kind: 'text', text: last.text + e.content, streaming: true }
+              } else {
+                next.push({ kind: 'text', text: e.content, streaming: true })
+              }
+              break
             case 'assistant':
-              next.push({ kind: 'text', text: e.content }); break
+              // versão final do passo: substitui os deltas acumulados (dedupe)
+              if (last?.kind === 'text' && last.streaming) {
+                next[next.length - 1] = { kind: 'text', text: e.content }
+              } else {
+                next.push({ kind: 'text', text: e.content })
+              }
+              break
             case 'tool_call':
+              // um tool call encerra o texto do passo — fecha o streaming se o final não veio
+              if (last?.kind === 'text' && last.streaming) {
+                next[next.length - 1] = { kind: 'text', text: last.text }
+              }
               next.push({ kind: 'tool', call: { name: e.name, args: e.args } }); break
             case 'tool_result': {
               for (let i = next.length - 1; i >= 0; i--) {
@@ -87,7 +106,15 @@ export default function AgentRunner() {
               break
             }
             case 'error':
+              if (last?.kind === 'text' && last.streaming) {
+                next[next.length - 1] = { kind: 'text', text: last.text }
+              }
               next.push({ kind: 'text', text: `[error] ${e.message}` }); break
+            case 'done':
+              if (last?.kind === 'text' && last.streaming) {
+                next[next.length - 1] = { kind: 'text', text: last.text }
+              }
+              break
           }
           return next
         })

@@ -13,11 +13,15 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 /**
  * Cliente para qualquer endpoint OpenAI-compatible (/v1/chat/completions).
- * ponytail: non-streaming; trocar para stream:true + parse de deltas se
- * streaming token-a-token for necessário.
+ * chat() é non-streaming; chatStream() faz stream:true com parse de deltas
+ * e remonta a resposta no mesmo formato do non-streaming.
  */
 @Component
 public class LlmClient {
@@ -59,6 +63,114 @@ public class LlmClient {
             throw new RuntimeException("LLM API error " + resp.statusCode() + ": " + resp.body());
         }
         return mapper.readTree(resp.body());
+    }
+
+    /**
+     * Como {@link #chat}, mas com stream:true — cada delta de texto do assistant é
+     * entregue em onDelta conforme chega. Retorna a resposta remontada no MESMO
+     * formato do não-streaming (choices[0].message com content/tool_calls, usage),
+     * então o chamador processa tool calls e usage sem mudanças.
+     * Endpoints que ignoram stream:true e devolvem JSON puro também funcionam.
+     */
+    public JsonNode chatStream(String baseUrl, String apiKey, String model, Double temperature,
+                               ArrayNode messages, ArrayNode tools, Consumer<String> onDelta) throws Exception {
+        ObjectNode body = mapper.createObjectNode();
+        body.put("model", model);
+        if (temperature != null) body.put("temperature", temperature);
+        body.set("messages", messages);
+        if (tools != null && !tools.isEmpty()) body.set("tools", tools);
+        body.put("stream", true);
+
+        String url = (baseUrl == null || baseUrl.isBlank() ? OPENROUTER_URL : baseUrl.replaceAll("/+$", ""))
+                + "/chat/completions";
+        if (url.contains("openrouter.ai")) body.set("usage", mapper.createObjectNode().put("include", true));
+
+        HttpRequest.Builder req = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(Duration.ofMinutes(5))
+                .header("Content-Type", "application/json")
+                .header("Accept", "text/event-stream")
+                .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)));
+        if (apiKey != null && !apiKey.isBlank()) req.header("Authorization", "Bearer " + apiKey);
+
+        HttpResponse<Stream<String>> resp = http.send(req.build(), HttpResponse.BodyHandlers.ofLines());
+        if (resp.statusCode() >= 400) {
+            String error = resp.body().reduce("", (a, b) -> a + b);
+            throw new RuntimeException("LLM API error " + resp.statusCode() + ": " + error);
+        }
+
+        StringBuilder content = new StringBuilder();
+        Map<Integer, ObjectNode> toolCalls = new TreeMap<>();       // index -> {id, type, function{name}}
+        Map<Integer, StringBuilder> toolArgs = new TreeMap<>();     // arguments chegam fatiados
+        StringBuilder nonSse = new StringBuilder();                 // fallback: endpoint respondeu JSON puro
+        String[] finishReason = new String[1];
+        JsonNode[] usage = new JsonNode[1];
+        boolean[] sawData = new boolean[1];
+
+        try (Stream<String> lines = resp.body()) {
+            for (String line : (Iterable<String>) lines::iterator) {
+                if (!line.startsWith("data:")) {
+                    // linhas de keep-alive (": ...") são descartadas; o resto pode ser JSON puro
+                    if (!line.isBlank() && !line.startsWith(":")) nonSse.append(line);
+                    continue;
+                }
+                sawData[0] = true;
+                String payload = line.substring(5).trim();
+                if (payload.isEmpty() || "[DONE]".equals(payload)) continue;
+                JsonNode chunk = mapper.readTree(payload);
+                if (chunk.hasNonNull("error")) {
+                    throw new RuntimeException("LLM API stream error: " + chunk.path("error").toString());
+                }
+                if (chunk.hasNonNull("usage")) usage[0] = chunk.get("usage");
+                JsonNode choice = chunk.path("choices").path(0);
+                if (choice.hasNonNull("finish_reason")) finishReason[0] = choice.path("finish_reason").asText();
+                JsonNode delta = choice.path("delta");
+                String piece = delta.path("content").asText("");
+                if (!piece.isEmpty()) {
+                    content.append(piece);
+                    onDelta.accept(piece);
+                }
+                for (JsonNode call : delta.path("tool_calls")) {
+                    int index = call.path("index").asInt(0);
+                    ObjectNode accumulated = toolCalls.computeIfAbsent(index, k -> {
+                        ObjectNode fresh = mapper.createObjectNode().put("type", "function");
+                        fresh.set("function", mapper.createObjectNode());
+                        return fresh;
+                    });
+                    if (call.hasNonNull("id")) accumulated.put("id", call.path("id").asText());
+                    JsonNode function = call.path("function");
+                    if (function.hasNonNull("name")) {
+                        ((ObjectNode) accumulated.get("function")).put("name", function.path("name").asText());
+                    }
+                    String argsPiece = function.path("arguments").asText("");
+                    if (!argsPiece.isEmpty()) {
+                        toolArgs.computeIfAbsent(index, k -> new StringBuilder()).append(argsPiece);
+                    }
+                }
+            }
+        }
+
+        // endpoint que ignorou stream:true — o corpo inteiro é a resposta não-streaming
+        if (!sawData[0] && !nonSse.isEmpty()) return mapper.readTree(nonSse.toString());
+
+        ObjectNode message = mapper.createObjectNode().put("role", "assistant");
+        message.put("content", content.toString());
+        if (!toolCalls.isEmpty()) {
+            ArrayNode calls = mapper.createArrayNode();
+            toolCalls.forEach((index, call) -> {
+                ((ObjectNode) call.get("function")).put("arguments",
+                        toolArgs.getOrDefault(index, new StringBuilder()).toString());
+                calls.add(call);
+            });
+            message.set("tool_calls", calls);
+        }
+        ObjectNode choice = mapper.createObjectNode();
+        choice.set("message", message);
+        choice.put("finish_reason", finishReason[0] == null ? (toolCalls.isEmpty() ? "stop" : "tool_calls") : finishReason[0]);
+        ObjectNode response = mapper.createObjectNode();
+        response.set("choices", mapper.createArrayNode().add(choice));
+        if (usage[0] != null) response.set("usage", usage[0]);
+        return response;
     }
 
     /**

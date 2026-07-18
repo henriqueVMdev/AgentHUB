@@ -145,6 +145,7 @@ export interface InboxConversation { id:number; integrationId:number; assignedAg
 export interface InboxMessage { id:number; conversationId:number; direction:'INBOUND'|'OUTBOUND'; senderType:string; agentId?:number; status:string; content:string; errorMessage?:string; createdAt:string }
 
 export type StreamEvent =
+  | { type: 'assistant_delta'; content: string }
   | { type: 'assistant'; content: string }
   | { type: 'tool_call'; name: string; args: string }
   | { type: 'tool_result'; name: string; result: string }

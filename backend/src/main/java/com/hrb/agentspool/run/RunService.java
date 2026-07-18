@@ -157,14 +157,16 @@ public class RunService {
 
             for (int step = 0; step < MAX_STEPS; step++) {
                 if (isCancelled(runId)) { finish(run, messages, emitter, true); return; }
-                JsonNode response = llm.chat(runtimeBaseUrl(agent), runtimeApiKey(agent, req.apiKey), agent.getModelId(),
-                        agent.getTemperature(), messages, toolDefs);
+                JsonNode response = llm.chatStream(runtimeBaseUrl(agent), runtimeApiKey(agent, req.apiKey), agent.getModelId(),
+                        agent.getTemperature(), messages, toolDefs,
+                        delta -> send(emitter, "assistant_delta", json("content", delta)));
                 addUsage(run, response.path("usage"));
                 JsonNode assistant = response.path("choices").path(0).path("message");
                 messages.add(assistant);
 
                 String content = assistant.path("content").asText("");
                 if (!content.isBlank()) {
+                    // consolida o texto do passo: o frontend troca os deltas acumulados pela versão final
                     send(emitter, "assistant", json("content", content));
                 }
 

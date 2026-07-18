@@ -16,14 +16,16 @@ import java.util.concurrent.Executors;
 public class InboxAgentService {
     private final InboxConversationRepository conversations;
     private final InboxMessageRepository messages;
+    private final IntegrationRepository integrations;
     private final RunService runService;
     // ponytail: fila serial única basta para single-user; pool se o volume crescer
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     public InboxAgentService(InboxConversationRepository conversations, InboxMessageRepository messages,
-                             RunService runService) {
+                             IntegrationRepository integrations, RunService runService) {
         this.conversations = conversations;
         this.messages = messages;
+        this.integrations = integrations;
         this.runService = runService;
     }
 
@@ -69,7 +71,11 @@ public class InboxAgentService {
                 if ("INBOUND".equals(m.getDirection())) turns.add(new String[]{"user", m.getContent()});
                 else if ("APPROVED".equals(m.getStatus())) turns.add(new String[]{"assistant", m.getContent()});
             }
-            String reply = runService.complete(conversation.getAssignedAgentId(), turns);
+            // atendimento roda com o contexto da operação da integração; mensagens de
+            // contato são conteúdo externo → memórias gravadas exigem aprovação humana
+            Long operationId = integrations.findById(conversation.getIntegrationId())
+                    .map(IntegrationConfig::getOperationId).orElse(null);
+            String reply = runService.complete(conversation.getAssignedAgentId(), operationId, true, turns);
             if (reply.isBlank()) throw new IllegalStateException("Agente não produziu resposta em texto.");
             draft.setContent(reply);
             draft.setStatus("PENDING_APPROVAL");

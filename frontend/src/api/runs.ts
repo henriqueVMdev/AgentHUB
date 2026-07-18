@@ -1,8 +1,8 @@
 import { api } from './client'
 import type { StreamEvent } from '../types'
 
-export const startRun = (agentId: number, prompt: string, continuationRunId?: number) =>
-  api.post<{ runId: number }>('/runs/start', { agentId, prompt, continuationRunId }).then(r => r.data.runId)
+export const startRun = (agentId: number, prompt: string, continuationRunId?: number, operationId?: number) =>
+  api.post<{ runId: number }>('/runs/start', { agentId, prompt, continuationRunId, operationId }).then(r => r.data.runId)
 
 export const stopRun = (runId: number) => api.post(`/runs/${runId}/stop`)
 
@@ -16,6 +16,7 @@ export function streamRun(runId: number, onEvent: (e: StreamEvent) => void): () 
   const on = (name: string, map: (data: any) => StreamEvent) =>
     es.addEventListener(name, (ev: MessageEvent) => onEvent(map(JSON.parse(ev.data))))
 
+  on('assistant_delta', d => ({ type: 'assistant_delta', content: d.content }))
   on('assistant', d => ({ type: 'assistant', content: d.content }))
   on('tool_call', d => ({ type: 'tool_call', name: d.name, args: d.args }))
   on('tool_result', d => ({ type: 'tool_result', name: d.name, result: d.result }))

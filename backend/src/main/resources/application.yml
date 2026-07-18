@@ -17,3 +17,8 @@ app:
   hermes-api-key: ${HERMES_API_SERVER_KEY:}
   openclaw-base-url: ${OPENCLAW_BASE_URL:}
   openclaw-api-key: ${OPENCLAW_GATEWAY_TOKEN:}
+  # retrieval semântico de memórias de operação; vazio = desabilitado (fallback: pinned + recentes)
+  # base-url vazio = OpenRouter; api-key vazio = reusa a credencial OpenRouter
+  embedding-base-url: ${EMBEDDING_BASE_URL:}
+  embedding-model: ${EMBEDDING_MODEL:}
+  embedding-api-key: ${EMBEDDING_API_KEY:}

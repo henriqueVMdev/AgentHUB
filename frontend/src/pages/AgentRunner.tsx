@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getAgent, listRuns } from '../api/agents'
+import { listOperations } from '../api/operations'
 import { startRun, stopRun, streamRun } from '../api/runs'
 import MessageStream, { type StreamItem } from '../components/MessageStream'
 import { TermInput } from '../components/ui'
-import type { Agent } from '../types'
+import type { Agent, Operation } from '../types'
 
 export default function AgentRunner() {
   const { id } = useParams()
@@ -14,14 +15,20 @@ export default function AgentRunner() {
   const [items, setItems] = useState<StreamItem[]>([])
   const [running, setRunning] = useState(false)
   const [continuationRunId, setContinuationRunId] = useState<number | undefined>()
+  const [operations, setOperations] = useState<Operation[]>([])
+  const [operationId, setOperationId] = useState<number | undefined>()
 
   useEffect(() => {
-    Promise.all([getAgent(Number(id)), listRuns(Number(id))]).then(([loadedAgent, runs]) => {
+    Promise.all([getAgent(Number(id)), listRuns(Number(id)), listOperations()]).then(([loadedAgent, runs, allOperations]) => {
       setAgent(loadedAgent)
+      setOperations(allOperations.filter((operation) =>
+        operation.status === 'ACTIVE' && operation.memberAgentIds.includes(Number(id))))
       const latest = runs.find((candidate) => candidate.status === 'DONE' && candidate.messagesJson)
       if (latest) {
         setContinuationRunId(latest.id)
         setItems(parseConversation(latest.messagesJson!))
+        // continuar a conversa mantém a operação: preserva save_memory e o vínculo nas estatísticas
+        if (latest.operationId) setOperationId(latest.operationId)
       }
     })
   }, [id])
@@ -61,15 +68,34 @@ export default function AgentRunner() {
     const sentPrompt = prompt.trim()
     setItems((previous) => [...previous, { kind: 'user', text: sentPrompt }]); setRunning(true); setPrompt('')
     try {
-      const runId = await startRun(Number(id), sentPrompt, continuationRunId)
+      const runId = await startRun(Number(id), sentPrompt, continuationRunId, operationId)
       setContinuationRunId(runId)
       streamRun(runId, (e) => {
         setItems((prev) => {
           const next = [...prev]
+          const last = next[next.length - 1]
           switch (e.type) {
+            case 'assistant_delta':
+              // acumula tokens no item em streaming; cria um novo se o anterior já fechou
+              if (last?.kind === 'text' && last.streaming) {
+                next[next.length - 1] = { kind: 'text', text: last.text + e.content, streaming: true }
+              } else {
+                next.push({ kind: 'text', text: e.content, streaming: true })
+              }
+              break
             case 'assistant':
-              next.push({ kind: 'text', text: e.content }); break
+              // versão final do passo: substitui os deltas acumulados (dedupe)
+              if (last?.kind === 'text' && last.streaming) {
+                next[next.length - 1] = { kind: 'text', text: e.content }
+              } else {
+                next.push({ kind: 'text', text: e.content })
+              }
+              break
             case 'tool_call':
+              // um tool call encerra o texto do passo — fecha o streaming se o final não veio
+              if (last?.kind === 'text' && last.streaming) {
+                next[next.length - 1] = { kind: 'text', text: last.text }
+              }
               next.push({ kind: 'tool', call: { name: e.name, args: e.args } }); break
             case 'tool_result': {
               for (let i = next.length - 1; i >= 0; i--) {
@@ -82,7 +108,15 @@ export default function AgentRunner() {
               break
             }
             case 'error':
+              if (last?.kind === 'text' && last.streaming) {
+                next[next.length - 1] = { kind: 'text', text: last.text }
+              }
               next.push({ kind: 'text', text: `[error] ${e.message}` }); break
+            case 'done':
+              if (last?.kind === 'text' && last.streaming) {
+                next[next.length - 1] = { kind: 'text', text: last.text }
+              }
+              break
           }
           return next
         })
@@ -128,7 +162,28 @@ export default function AgentRunner() {
             {agent.modelId} · {running ? <span className="text-term-amber">executing</span> : <span className="text-term-dim">ready</span>}
           </div>
         </div>
-        <button onClick={newConversation} disabled={running} className="btn btn-ghost ml-auto">+ nova conversa</button>
+        <div className="ml-auto flex items-center gap-2">
+          {operations.length > 0 && (
+            <select
+              className="field text-xs w-44"
+              value={operationId ?? ''}
+              disabled={running}
+              title="operação: injeta briefing, skills e memórias no run (aplica na próxima conversa)"
+              onChange={(e) => {
+                setOperationId(e.target.value ? Number(e.target.value) : undefined)
+                // trocar de operação muda o system prompt — só vale numa conversa nova
+                setItems([])
+                setContinuationRunId(undefined)
+              }}
+            >
+              <option value="">sem operação</option>
+              {operations.map((operation) => (
+                <option key={operation.id} value={operation.id}>{operation.emoji} {operation.name}</option>
+              ))}
+            </select>
+          )}
+          <button onClick={newConversation} disabled={running} className="btn btn-ghost">+ nova conversa</button>
+        </div>
       </div>
 
       <div className="flex gap-2 mb-6">

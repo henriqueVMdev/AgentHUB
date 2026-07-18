@@ -10,6 +10,7 @@ public class AgentRun {
     private Long id;
 
     private Long agentId;
+    private Long operationId; // null = run avulsa, fora de qualquer operação
     private String status; // RUNNING | DONE | ERROR
 
     @Column(columnDefinition = "TEXT")
@@ -31,6 +32,8 @@ public class AgentRun {
     public void setId(Long id) { this.id = id; }
     public Long getAgentId() { return agentId; }
     public void setAgentId(Long agentId) { this.agentId = agentId; }
+    public Long getOperationId() { return operationId; }
+    public void setOperationId(Long operationId) { this.operationId = operationId; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public String getInputPrompt() { return inputPrompt; }

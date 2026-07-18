@@ -48,9 +48,75 @@ export interface SkillProposal {
   reviewedAt?: string
 }
 
+export interface Operation {
+  id?: number
+  name: string
+  description: string
+  briefing: string
+  status: 'ACTIVE' | 'ARCHIVED'
+  emoji: string
+  color: string
+  memberAgentIds: number[]
+  skillIds: number[]
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type MemoryCategory = 'FACT' | 'DECISION' | 'LEARNING'
+
+export interface OperationMemory {
+  id: number
+  operationId: number
+  content: string
+  category: MemoryCategory
+  status: 'ACTIVE' | 'PENDING'
+  pinned: boolean
+  createdByAgentId?: number
+  createdByRunId?: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface MemoryDraft {
+  content: string
+  category: MemoryCategory
+}
+
+export interface ConsolidationPreview {
+  before: OperationMemory[]
+  after: MemoryDraft[]
+}
+
+export interface OperationStats {
+  runs: number
+  tokens: number
+  costUsd: number
+}
+
+export interface OperationStatsSummary {
+  total: OperationStats
+  month: OperationStats
+}
+
+export interface ScheduledRun {
+  id?: number
+  name: string
+  agentId: number | null
+  operationId?: number | null
+  prompt: string
+  cronExpression: string
+  enabled: boolean
+  lastRunAt?: string
+  lastRunId?: number
+  nextRunAt?: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
 export interface AgentRun {
   id: number
   agentId: number
+  operationId?: number
   status: 'RUNNING' | 'DONE' | 'ERROR' | 'CANCELLED'
   inputPrompt: string
   messagesJson?: string
@@ -71,6 +137,7 @@ export interface Integration {
   account: string
   secret?: string
   agentIds: number[]
+  operationId?: number | null
   createdAt?: string
   updatedAt?: string
 }
@@ -78,6 +145,7 @@ export interface InboxConversation { id:number; integrationId:number; assignedAg
 export interface InboxMessage { id:number; conversationId:number; direction:'INBOUND'|'OUTBOUND'; senderType:string; agentId?:number; status:string; content:string; errorMessage?:string; createdAt:string }
 
 export type StreamEvent =
+  | { type: 'assistant_delta'; content: string }
   | { type: 'assistant'; content: string }
   | { type: 'tool_call'; name: string; args: string }
   | { type: 'tool_result'; name: string; result: string }

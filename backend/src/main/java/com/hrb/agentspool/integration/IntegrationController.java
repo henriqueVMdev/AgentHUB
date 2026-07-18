@@ -16,6 +16,7 @@ public class IntegrationController {
         return integrations.findById(id).map(current -> {
             current.setName(input.getName()); current.setProvider(input.getProvider()); current.setEnabled(input.getEnabled());
             current.setEndpointUrl(input.getEndpointUrl()); current.setAccount(input.getAccount()); current.setAgentIds(input.getAgentIds());
+            current.setOperationId(input.getOperationId());
             if (input.getSecret() != null && !input.getSecret().isBlank()) current.setSecret(input.getSecret());
             return ResponseEntity.ok(integrations.save(current));
         }).orElse(ResponseEntity.notFound().build());

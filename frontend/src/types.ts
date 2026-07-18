@@ -69,11 +69,22 @@ export interface OperationMemory {
   operationId: number
   content: string
   category: MemoryCategory
+  status: 'ACTIVE' | 'PENDING'
   pinned: boolean
   createdByAgentId?: number
   createdByRunId?: number
   createdAt: string
   updatedAt: string
+}
+
+export interface MemoryDraft {
+  content: string
+  category: MemoryCategory
+}
+
+export interface ConsolidationPreview {
+  before: OperationMemory[]
+  after: MemoryDraft[]
 }
 
 export interface AgentRun {

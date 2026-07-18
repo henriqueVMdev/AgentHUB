@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { AgentRun, Operation, OperationMemory } from '../types'
+import type { AgentRun, ConsolidationPreview, MemoryDraft, Operation, OperationMemory } from '../types'
 
 export const listOperations = () => api.get<Operation[]>('/operations').then((r) => r.data)
 export const getOperation = (id: number) => api.get<Operation>(`/operations/${id}`).then((r) => r.data)
@@ -19,6 +19,12 @@ export const updateOperationMemory = (operationId: number, memory: OperationMemo
   api.put<OperationMemory>(`/operations/${operationId}/memories/${memory.id}`, memory).then((r) => r.data)
 export const deleteOperationMemory = (operationId: number, memoryId: number) =>
   api.delete(`/operations/${operationId}/memories/${memoryId}`)
+export const approveOperationMemory = (operationId: number, memoryId: number) =>
+  api.post<OperationMemory>(`/operations/${operationId}/memories/${memoryId}/approve`).then((r) => r.data)
+export const consolidateOperationMemories = (operationId: number) =>
+  api.post<ConsolidationPreview>(`/operations/${operationId}/memories/consolidate`).then((r) => r.data)
+export const applyOperationConsolidation = (operationId: number, drafts: MemoryDraft[]) =>
+  api.post<OperationMemory[]>(`/operations/${operationId}/memories/consolidate/apply`, drafts).then((r) => r.data)
 
 export const listOperationRuns = (operationId: number) =>
   api.get<AgentRun[]>(`/operations/${operationId}/runs`).then((r) => r.data)

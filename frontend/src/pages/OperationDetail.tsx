@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { listAgents } from '../api/agents'
 import {
-  createOperationMemory, deleteOperation, deleteOperationMemory, getOperation,
-  listOperationMemories, listOperationRuns, updateOperation, updateOperationMemory,
+  applyOperationConsolidation, approveOperationMemory, consolidateOperationMemories, createOperationMemory,
+  deleteOperation, deleteOperationMemory, getOperation, listOperationMemories, listOperationRuns,
+  updateOperation, updateOperationMemory,
 } from '../api/operations'
 import { listSkills } from '../api/skills'
 import { TermInput, Win } from '../components/ui'
-import type { Agent, AgentRun, AgentSkill, MemoryCategory, Operation, OperationMemory } from '../types'
+import type { Agent, AgentRun, AgentSkill, ConsolidationPreview, MemoryCategory, Operation, OperationMemory } from '../types'
 
 const categories: MemoryCategory[] = ['FACT', 'DECISION', 'LEARNING']
 
@@ -23,6 +24,9 @@ export default function OperationDetail() {
   const [runs, setRuns] = useState<AgentRun[]>([])
   const [saved, setSaved] = useState(false)
   const [memoryDraft, setMemoryDraft] = useState({ content: '', category: 'FACT' as MemoryCategory })
+  const [consolidating, setConsolidating] = useState(false)
+  const [preview, setPreview] = useState<ConsolidationPreview | null>(null)
+  const [consolidateError, setConsolidateError] = useState<string | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -64,6 +68,38 @@ export default function OperationDetail() {
   const removeMemory = async (memory: OperationMemory) => {
     await deleteOperationMemory(operationId, memory.id)
     setMemories(await listOperationMemories(operationId))
+  }
+
+  const approveMemory = async (memory: OperationMemory) => {
+    await approveOperationMemory(operationId, memory.id)
+    setMemories(await listOperationMemories(operationId))
+  }
+
+  const consolidate = async () => {
+    setConsolidating(true)
+    setConsolidateError(null)
+    try {
+      setPreview(await consolidateOperationMemories(operationId))
+    } catch (err: any) {
+      setConsolidateError(err.response?.data?.message ?? err.message)
+    } finally {
+      setConsolidating(false)
+    }
+  }
+
+  const applyConsolidation = async () => {
+    if (!preview) return
+    setConsolidating(true)
+    setConsolidateError(null)
+    try {
+      await applyOperationConsolidation(operationId, preview.after)
+      setPreview(null)
+      setMemories(await listOperationMemories(operationId))
+    } catch (err: any) {
+      setConsolidateError(err.response?.data?.message ?? err.message)
+    } finally {
+      setConsolidating(false)
+    }
   }
 
   const remove = async () => {
@@ -154,14 +190,50 @@ export default function OperationDetail() {
             {categories.map((category) => <option key={category} value={category}>{category}</option>)}
           </select>
           <button className="btn btn-primary" onClick={addMemory}>+ salvar</button>
+          <button className="btn btn-ghost" onClick={consolidate} disabled={consolidating || !!preview}
+            title="usa o LLM para deduplicar e fundir as memórias não fixadas (com preview antes de aplicar)">
+            {consolidating && !preview ? 'consolidando…' : '⚗ consolidar'}
+          </button>
         </div>
+        {consolidateError && <p className="text-xs text-term-red">[erro] {consolidateError}</p>}
+
+        {preview && (
+          <div className="panel p-4 border-term-amber/50 space-y-3">
+            <div className="text-sm font-bold text-term-amber">
+              preview da consolidação: {preview.before.length} memórias → {preview.after.length}
+            </div>
+            <p className="text-[10px] text-term-muted">as memórias fixadas (📌) e pendentes não são tocadas · nada é gravado até você aplicar</p>
+            <div className="space-y-2 max-h-72 overflow-auto">
+              {preview.after.map((draft, index) => (
+                <div key={index} className="flex items-start gap-2">
+                  <span className="badge shrink-0">{draft.category}</span>
+                  <p className="text-xs text-term-text whitespace-pre-wrap">{draft.content}</p>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button className="btn btn-primary" onClick={applyConsolidation} disabled={consolidating}>
+                {consolidating ? 'aplicando…' : 'aplicar'}
+              </button>
+              <button className="btn btn-ghost" onClick={() => setPreview(null)} disabled={consolidating}>cancelar</button>
+            </div>
+          </div>
+        )}
 
         {memories.map((memory) => (
-          <div key={memory.id} className={`panel p-3 ${memory.pinned ? 'border-term-amber/40' : ''}`}>
+          <div key={memory.id}
+            className={`panel p-3 ${memory.status === 'PENDING' ? 'border-term-amber/60' : memory.pinned ? 'border-term-amber/40' : ''}`}>
             <div className="flex items-start gap-2">
               <span className="badge shrink-0">{memory.category}</span>
+              {memory.status === 'PENDING' && (
+                <span className="badge shrink-0 border-term-amber/50 text-term-amber">pendente</span>
+              )}
               <p className="text-xs text-term-text whitespace-pre-wrap flex-1">{memory.content}</p>
               <div className="flex gap-1 shrink-0">
+                {memory.status === 'PENDING' && (
+                  <button className="btn btn-primary px-2 py-1 text-xs" title="aprovar: passa a entrar no prompt dos runs"
+                    onClick={() => approveMemory(memory)}>aprovar</button>
+                )}
                 <button className="btn btn-ghost px-2 py-1 text-xs" title={memory.pinned ? 'desafixar' : 'fixar (sempre no prompt)'}
                   onClick={() => togglePin(memory)}>{memory.pinned ? '📌' : '📍'}</button>
                 <button className="btn btn-ghost px-2 py-1 text-xs text-term-red" onClick={() => removeMemory(memory)}>✕</button>

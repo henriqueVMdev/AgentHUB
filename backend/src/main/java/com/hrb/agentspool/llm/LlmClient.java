@@ -11,6 +11,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Cliente para qualquer endpoint OpenAI-compatible (/v1/chat/completions).
@@ -57,5 +59,42 @@ public class LlmClient {
             throw new RuntimeException("LLM API error " + resp.statusCode() + ": " + resp.body());
         }
         return mapper.readTree(resp.body());
+    }
+
+    /**
+     * POST /embeddings (OpenAI-compatible). Retorna um vetor por input, na mesma ordem.
+     */
+    public List<float[]> embed(String baseUrl, String apiKey, String model, List<String> inputs) throws Exception {
+        ObjectNode body = mapper.createObjectNode();
+        body.put("model", model);
+        ArrayNode inputNode = mapper.createArrayNode();
+        for (String input : inputs) inputNode.add(input);
+        body.set("input", inputNode);
+
+        String url = (baseUrl == null || baseUrl.isBlank() ? OPENROUTER_URL : baseUrl.replaceAll("/+$", ""))
+                + "/embeddings";
+        HttpRequest.Builder req = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(Duration.ofMinutes(2))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)));
+        if (apiKey != null && !apiKey.isBlank()) req.header("Authorization", "Bearer " + apiKey);
+
+        HttpResponse<String> resp = http.send(req.build(), HttpResponse.BodyHandlers.ofString());
+        if (resp.statusCode() >= 400) {
+            throw new RuntimeException("Embeddings API error " + resp.statusCode() + ": " + resp.body());
+        }
+        JsonNode data = mapper.readTree(resp.body()).path("data");
+        List<float[]> vectors = new ArrayList<>();
+        for (JsonNode item : data) {
+            JsonNode raw = item.path("embedding");
+            float[] vector = new float[raw.size()];
+            for (int i = 0; i < raw.size(); i++) vector[i] = (float) raw.get(i).asDouble();
+            vectors.add(vector);
+        }
+        if (vectors.size() != inputs.size()) {
+            throw new RuntimeException("Embeddings API returned " + vectors.size() + " vectors for " + inputs.size() + " inputs");
+        }
+        return vectors;
     }
 }

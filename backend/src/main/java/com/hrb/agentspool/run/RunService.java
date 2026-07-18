@@ -12,6 +12,7 @@ import com.hrb.agentspool.operation.Operation;
 import com.hrb.agentspool.operation.OperationController;
 import com.hrb.agentspool.operation.OperationMemory;
 import com.hrb.agentspool.operation.OperationMemoryRepository;
+import com.hrb.agentspool.operation.OperationMemoryService;
 import com.hrb.agentspool.operation.OperationRepository;
 import com.hrb.agentspool.skill.AgentSkill;
 import com.hrb.agentspool.skill.AgentSkillRepository;
@@ -23,7 +24,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -47,6 +47,7 @@ public class RunService {
     private final SkillProposalRepository skillProposals;
     private final OperationRepository operations;
     private final OperationMemoryRepository operationMemories;
+    private final OperationMemoryService operationMemoryService;
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Value("${app.hermes-base-url:}")
@@ -64,7 +65,7 @@ public class RunService {
     public RunService(AgentRepository agents, AgentRunRepository runs, LlmClient llm, ToolRegistry tools,
                       AgentSkillRepository skills, SkillProposalRepository skillProposals,
                       OperationRepository operations, OperationMemoryRepository operationMemories,
-                      CredentialService credentials) {
+                      OperationMemoryService operationMemoryService, CredentialService credentials) {
         this.agents = agents;
         this.runs = runs;
         this.llm = llm;
@@ -73,6 +74,7 @@ public class RunService {
         this.skillProposals = skillProposals;
         this.operations = operations;
         this.operationMemories = operationMemories;
+        this.operationMemoryService = operationMemoryService;
         this.credentials = credentials;
     }
 
@@ -133,7 +135,7 @@ public class RunService {
 
             ArrayNode messages = previousMessages(req, agent);
             if (messages.isEmpty()) {
-                String systemPrompt = buildSystemPrompt(agent, operation);
+                String systemPrompt = buildSystemPrompt(agent, operation, req.prompt);
                 if (!systemPrompt.isBlank()) messages.add(msg("system", systemPrompt));
             }
             messages.add(msg("user", req.prompt));
@@ -240,10 +242,10 @@ public class RunService {
                 }).orElseGet(mapper::createArrayNode);
     }
 
-    private String buildSystemPrompt(AgentConfig agent, Operation operation) {
+    private String buildSystemPrompt(AgentConfig agent, Operation operation, String query) {
         StringBuilder prompt = new StringBuilder();
         if (agent.getSystemPrompt() != null) prompt.append(agent.getSystemPrompt().trim());
-        if (operation != null) appendOperationContext(prompt, operation);
+        if (operation != null) appendOperationContext(prompt, operation, query);
         // skills do agente + da operação, deduplicadas preservando ordem
         LinkedHashSet<Long> ids = new LinkedHashSet<>();
         if (agent.getEnabledSkillIds() != null) ids.addAll(agent.getEnabledSkillIds());
@@ -272,8 +274,8 @@ public class RunService {
         return prompt.toString().trim();
     }
 
-    /** Briefing da operação + memórias (todas as pinned, depois as 30 mais recentes). */
-    private void appendOperationContext(StringBuilder prompt, Operation operation) {
+    /** Briefing da operação + memórias (pinned sempre; demais por relevância à query, com fallback por recência). */
+    private void appendOperationContext(StringBuilder prompt, Operation operation, String query) {
         prompt.append("\n\n<operation_context>\n")
                 .append("Operation: ").append(operation.getName()).append("\n");
         if (operation.getDescription() != null && !operation.getDescription().isBlank()) {
@@ -284,9 +286,7 @@ public class RunService {
         }
         prompt.append("</operation_context>");
 
-        List<OperationMemory> selected = new ArrayList<>(
-                operationMemories.findAllByOperationIdAndPinnedTrueOrderByCreatedAtDesc(operation.getId()));
-        selected.addAll(operationMemories.findTop30ByOperationIdAndPinnedFalseOrderByCreatedAtDesc(operation.getId()));
+        List<OperationMemory> selected = operationMemoryService.selectForPrompt(operation.getId(), query);
         if (selected.isEmpty()) return;
         prompt.append("\n\n<operation_memory>\n");
         for (OperationMemory memory : selected) {
@@ -376,7 +376,16 @@ public class RunService {
             memory.setCategory(category);
             memory.setCreatedByAgentId(agent.getId());
             memory.setCreatedByRunId(sourceRunId);
+            // agente com acesso à web pode ter processado conteúdo externo malicioso;
+            // a memória só entra no contexto compartilhado depois de aprovação humana
+            boolean exposed = agent.getEnabledTools() != null
+                    && (agent.getEnabledTools().contains("http") || agent.getEnabledTools().contains("browser"));
+            memory.setStatus(exposed ? "PENDING" : "ACTIVE");
             memory = operationMemories.save(memory);
+            if (exposed) {
+                return "Memory #" + memory.getId() + " staged for human approval (web-exposed agents require review).";
+            }
+            operationMemoryService.tryEmbed(memory);
             return "Memory #" + memory.getId() + " saved to operation '" + operation.getName() + "'.";
         }
         if ("propose_skill_change".equals(name)) {
@@ -407,7 +416,7 @@ public class RunService {
     private String executeChild(AgentConfig child, Operation operation, String task, String requestKey,
                                 int depth, Long sourceRunId) throws Exception {
         ArrayNode messages = mapper.createArrayNode();
-        String systemPrompt = buildSystemPrompt(child, operation);
+        String systemPrompt = buildSystemPrompt(child, operation, task);
         if (!systemPrompt.isBlank()) messages.add(msg("system", systemPrompt));
         messages.add(msg("user", task));
         String result = chatLoop(child, operation, messages, requestKey, depth, sourceRunId);
@@ -421,7 +430,7 @@ public class RunService {
     public String complete(Long agentId, List<String[]> turns) throws Exception {
         AgentConfig agent = agents.findById(agentId).orElseThrow();
         ArrayNode messages = mapper.createArrayNode();
-        String systemPrompt = buildSystemPrompt(agent, null);
+        String systemPrompt = buildSystemPrompt(agent, null, null);
         if (!systemPrompt.isBlank()) messages.add(msg("system", systemPrompt));
         for (String[] turn : turns) messages.add(msg(turn[0], turn[1]));
         return chatLoop(agent, null, messages, null, 0, null);

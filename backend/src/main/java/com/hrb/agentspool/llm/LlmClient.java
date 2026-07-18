@@ -33,6 +33,29 @@ public class LlmClient {
     private final ObjectMapper mapper = new ObjectMapper();
 
     /**
+     * Envia com retry para falhas transitórias: 429/5xx e erros de conexão, com
+     * backoff (2s, 4s). Um 429 momentâneo do OpenRouter não derruba o run — e uma
+     * rotina agendada não falha silenciosa de madrugada. 4xx de verdade não repete.
+     * No streaming o retry só acontece aqui, antes de qualquer delta ser consumido.
+     */
+    private <T> HttpResponse<T> sendWithRetry(HttpRequest req, HttpResponse.BodyHandler<T> handler) throws Exception {
+        long[] backoffMs = {2000, 4000};
+        for (int attempt = 0; ; attempt++) {
+            try {
+                HttpResponse<T> resp = http.send(req, handler);
+                if (attempt < backoffMs.length && (resp.statusCode() == 429 || resp.statusCode() >= 500)) {
+                    Thread.sleep(backoffMs[attempt]);
+                    continue;
+                }
+                return resp;
+            } catch (java.io.IOException e) {
+                if (attempt >= backoffMs.length) throw e;
+                Thread.sleep(backoffMs[attempt]);
+            }
+        }
+    }
+
+    /**
      * @param messages array JSON de messages (formato OpenAI)
      * @param tools    array JSON de tool definitions, ou null
      * @return a resposta completa (choices, usage, ...); o message fica em choices[0].message
@@ -58,7 +81,7 @@ public class LlmClient {
                 .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)));
         if (apiKey != null && !apiKey.isBlank()) req.header("Authorization", "Bearer " + apiKey);
 
-        HttpResponse<String> resp = http.send(req.build(), HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> resp = sendWithRetry(req.build(), HttpResponse.BodyHandlers.ofString());
         if (resp.statusCode() >= 400) {
             throw new RuntimeException("LLM API error " + resp.statusCode() + ": " + resp.body());
         }
@@ -93,7 +116,7 @@ public class LlmClient {
                 .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)));
         if (apiKey != null && !apiKey.isBlank()) req.header("Authorization", "Bearer " + apiKey);
 
-        HttpResponse<Stream<String>> resp = http.send(req.build(), HttpResponse.BodyHandlers.ofLines());
+        HttpResponse<Stream<String>> resp = sendWithRetry(req.build(), HttpResponse.BodyHandlers.ofLines());
         if (resp.statusCode() >= 400) {
             String error = resp.body().reduce("", (a, b) -> a + b);
             throw new RuntimeException("LLM API error " + resp.statusCode() + ": " + error);
@@ -192,7 +215,7 @@ public class LlmClient {
                 .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)));
         if (apiKey != null && !apiKey.isBlank()) req.header("Authorization", "Bearer " + apiKey);
 
-        HttpResponse<String> resp = http.send(req.build(), HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> resp = sendWithRetry(req.build(), HttpResponse.BodyHandlers.ofString());
         if (resp.statusCode() >= 400) {
             throw new RuntimeException("Embeddings API error " + resp.statusCode() + ": " + resp.body());
         }

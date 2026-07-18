@@ -27,6 +27,8 @@ export default function AgentRunner() {
       if (latest) {
         setContinuationRunId(latest.id)
         setItems(parseConversation(latest.messagesJson!))
+        // continuar a conversa mantém a operação: preserva save_memory e o vínculo nas estatísticas
+        if (latest.operationId) setOperationId(latest.operationId)
       }
     })
   }, [id])
